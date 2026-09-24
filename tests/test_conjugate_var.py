@@ -208,6 +208,47 @@ def test_accepts_pandemic_break_hyperparameters():
     assert model.volatility is break_
 
 
+@pytest.mark.xfail(strict=True, reason="issue 04b: ConjugateVAR.fit still constructs via model_construct")
+def test_malformed_conjugate_posterior_raises(monkeypatch):
+    """ConjugateVAR.fit constructs its result through `FittedVAR.from_posterior`
+    (issue 04b), so a posterior that breaks the shared schema must raise, not
+    silently return a `FittedVAR` that breaks on first use.
+
+    Monkeypatches `select_and_sample` (the conjugate engine's own posterior
+    producer) to return coefficient draws shaped for one lag too many, so the
+    packed `B` block disagrees with the requested `lags=1` — a case the
+    conjugate engine could reach for real via a shape bug, without needing MCMC
+    to reproduce.
+    """
+    from impulso import conjugate as conjugate_module
+
+    data = _synthetic_var_data(60, seed=0)
+    model = ConjugateVAR(lags=1, prior=NIWPrior(), draws=DRAWS, tune=DRAWS, seed=0)
+
+    def _malformed_select_and_sample(y, n_lags, prior, volatility, *, draws, tune, seed):
+        n = y.shape[1]
+        rng = np.random.default_rng(seed)
+        # One lag block too many: as if n_lags + 1 were estimated instead of
+        # the requested n_lags, so the packed `coeff` dim will disagree with
+        # `ConjugateVAR.lags`.
+        k = 1 + n * (n_lags + 1)
+        B_full = rng.standard_normal((draws, n, k))
+        L = np.tile(np.eye(n), (draws, 1, 1))
+        return {
+            "B_full": B_full,
+            "L": L,
+            "hyperparameters": {},
+            "log_marginal_likelihood": 0.0,
+            "mode": {},
+            "acceptance_rate": 1.0,
+        }
+
+    monkeypatch.setattr(conjugate_module, "select_and_sample", _malformed_select_and_sample)
+
+    with pytest.raises(ValueError, match="coeff"):
+        model.fit(data)
+
+
 def test_accepts_no_volatility():
     """`volatility=None` is a homoscedastic conjugate VAR and stays unaffected."""
     assert ConjugateVAR(lags=1, prior=NIWPrior()).volatility is None
