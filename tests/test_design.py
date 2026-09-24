@@ -9,19 +9,11 @@ Gates:
   path.
 * `n_lags < 1` is rejected.
 * The builder is exported from the public `impulso` namespace.
-
-`impulso._design.build_lag_design_matrix` does not exist yet, so every test
-here is `xfail(strict=True)` on the tests branch (issue 02) and is expected
-to start passing, unmarked, once the builder and its call sites land.
 """
 
 import numpy as np
 import pandas as pd
 import pytest
-
-pytestmark = pytest.mark.xfail(
-    strict=True, reason="issue 02: impulso._design.build_lag_design_matrix does not exist yet"
-)
 
 LAG_ORDERS = [1, 2, 4]
 
@@ -70,6 +62,7 @@ def test_numpy_stacking_matches_reference(rng, n_lags, with_exog):
 def test_symbolic_path_matches_numpy(rng, n_lags):
     """A symbolic 2-D input takes the `pytensor.tensor.concatenate` branch."""
     import pytensor.tensor as pt
+
     from impulso._design import build_lag_design_matrix  # ty: ignore[unresolved-import]
 
     endog = rng.standard_normal((30, 3))

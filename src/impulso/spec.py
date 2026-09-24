@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from impulso._arviz_compat import InferenceDataLike
 from impulso._base import ImpulsoBaseModel
+from impulso._design import build_lag_design_matrix
 from impulso._posterior import COEFFICIENTS, EXOG_COEFFICIENTS, INTERCEPT
 from impulso.data import VARData, _format_names
 from impulso.observation import Gaussian, StudentT
@@ -377,13 +378,7 @@ class VAR(ImpulsoBaseModel):
 
         # Build data matrices
         y = data.endog
-        Y = y[n_lags:]
-        X_parts = []
-        for lag in range(1, n_lags + 1):
-            X_parts.append(y[n_lags - lag : -lag])
-        X_lag = np.hstack(X_parts)
-
-        X_exog = data.exog[n_lags:] if data.exog is not None else None
+        Y, X_lag, X_exog = build_lag_design_matrix(y, n_lags, data.exog)
 
         # OLS residuals seed per-variable SV priors. Constant-volatility adapters
         # ignore `data`; only stochastic adapters use it.

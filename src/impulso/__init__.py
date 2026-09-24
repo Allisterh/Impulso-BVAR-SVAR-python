@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     from impulso._conjugate import ar1_residual_sd
+    from impulso._design import build_lag_design_matrix
     from impulso._granger import toda_yamamoto
     from impulso._linalg import lag_matrices
     from impulso._ma import compute_ma_phi
@@ -96,6 +97,7 @@ __all__ = [
     "ZeroSignRestriction",
     "adf_test",
     "ar1_residual_sd",
+    "build_lag_design_matrix",
     "compare_evidence",
     "compute_ma_phi",
     "enable_runtime_checks",
@@ -156,6 +158,7 @@ _LAZY_IMPORTS: dict[str, str] = {
     "compute_ma_phi": "impulso._ma",
     "lag_matrices": "impulso._linalg",
     "ar1_residual_sd": "impulso._conjugate",
+    "build_lag_design_matrix": "impulso._design",
 }
 """Map of lazily-exported name to the module that defines it.
 
