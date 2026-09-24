@@ -173,6 +173,52 @@ class TestPyMCModelBuild:
         assert {v.name for v in model.observed_RVs} == {"obs"}
 
 
+class TestVarFitWithInnovationScalePriors:
+    """Issue 06: `Constant.innovation_scale_priors` wired through `VAR.fit`."""
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_mismatched_length_raises_before_sampling(self, var_data_2v):
+        """A length mismatch must surface as a `ValueError` from model building,
+        before the sampler is ever invoked (`_build_pymc_model` runs first in
+        `VAR.fit`, so a real sampler is never reached)."""
+        from impulso.volatility import InnovationScalePrior
+
+        bad_volatility = Constant(innovation_scale_priors=(InnovationScalePrior(family="halfnormal", scale=0.1),))
+        spec = VAR(lags=1, volatility=bad_volatility)
+
+        with pytest.raises(ValueError, match="innovation_scale_priors"):
+            spec.fit(var_data_2v)
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_matched_length_registers_per_variable_rvs(self, var_data_2v):
+        """A correctly-sized `innovation_scale_priors` builds cleanly through
+        the real `VAR.fit` pipeline (intercepted before sampling)."""
+        from impulso.volatility import InnovationScalePrior
+
+        priors = (
+            InnovationScalePrior(family="halfnormal", scale=0.2),
+            InnovationScalePrior(family="halfcauchy", scale=2.5),
+        )
+        spec = VAR(lags=1, volatility=Constant(innovation_scale_priors=priors))
+
+        captured: dict[str, object] = {}
+
+        class CapturingSampler:
+            name = "capture"
+
+            def sample(self, model):
+                captured["model"] = model
+                raise RuntimeError("stop before sampling")
+
+        with pytest.raises(RuntimeError, match="stop before sampling"):
+            spec.fit(var_data_2v, sampler=CapturingSampler())
+
+        model = captured["model"]
+        rv_names = {v.name for v in model.unobserved_RVs}
+        assert {"sigma_sd_0", "sigma_sd_1", "tril_offdiag"} <= rv_names
+        assert "sigma_sd" not in rv_names
+
+
 class TestVarFitWithSV:
     def test_var_fit_with_sv_builds_3d_chol(self, var_data_2v):
         """VAR(volatility=StochasticVolatility(...)).fit(...) builds a model

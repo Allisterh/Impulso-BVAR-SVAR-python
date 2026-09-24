@@ -273,3 +273,267 @@ class TestConstantCholeskyPath:
         adapter = Constant()
         path = adapter.cholesky_path(synthetic_idata_2v.posterior, T=5)
         np.testing.assert_array_equal(path[..., 0, :, :], path[..., 4, :, :])
+
+
+# --------------------------------------------------------------------------------
+# Issue 06: per-variable innovation-scale prior (`InnovationScalePrior`,
+# `Constant.innovation_scale_priors`).
+# --------------------------------------------------------------------------------
+
+
+class TestConstantDefaultLogpUnchanged:
+    """Regression: the default (field-omitted) path's log-probability must not
+    change once `innovation_scale_priors` exists on `Constant`.
+
+    Only touches API that already exists today (`Constant.build_pymc_latent`
+    with no new field), so — unlike the rest of this section — this test is
+    NOT xfailed: it must pass identically before and after the issue 06
+    implementation lands.
+    """
+
+    def test_default_sigma_sd_matches_halfcauchy_logpdf(self):
+        import pymc as pm
+        from scipy import stats
+
+        with pm.Model() as model:
+            Constant(sigma_sd_beta=1.7).build_pymc_latent(n_vars=3, T=10)
+
+        point = np.array([0.3, 1.2, 4.0])
+        logp = pm.logp(model["sigma_sd"], point).eval()
+        expected = stats.halfcauchy(scale=1.7).logpdf(point)
+        np.testing.assert_allclose(logp, expected, rtol=1e-6)
+
+
+class TestInnovationScalePrior:
+    """Standalone `InnovationScalePrior` spec: family, scale, validation, round-trip."""
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
+    @pytest.mark.parametrize("family", ["halfnormal", "exponential", "halfcauchy"])
+    def test_construction_each_family(self, family):
+        from impulso.volatility import InnovationScalePrior
+
+        prior = InnovationScalePrior(family=family, scale=1.0)
+        assert prior.family == family
+        assert prior.scale == 1.0
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
+    @pytest.mark.parametrize("bad_scale", [0.0, -1.0, -0.01])
+    def test_non_positive_scale_raises(self, bad_scale):
+        from pydantic import ValidationError
+
+        from impulso.volatility import InnovationScalePrior
+
+        with pytest.raises(ValidationError):
+            InnovationScalePrior(family="halfnormal", scale=bad_scale)
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
+    def test_unknown_family_raises(self):
+        from pydantic import ValidationError
+
+        from impulso.volatility import InnovationScalePrior
+
+        with pytest.raises(ValidationError):
+            InnovationScalePrior(family="lognormal", scale=1.0)
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
+    def test_is_frozen(self):
+        from pydantic import ValidationError
+
+        from impulso.volatility import InnovationScalePrior
+
+        prior = InnovationScalePrior(family="halfnormal", scale=1.0)
+        with pytest.raises(ValidationError):
+            prior.scale = 2.0
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
+    def test_model_dump_round_trip(self):
+        from impulso.volatility import InnovationScalePrior
+
+        prior = InnovationScalePrior(family="exponential", scale=0.4)
+        assert InnovationScalePrior.model_validate(prior.model_dump()) == prior
+
+
+class TestConstantInnovationScalePriorsField:
+    """`Constant.innovation_scale_priors`: default, construction, round-trip."""
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_default_is_none(self):
+        assert Constant().innovation_scale_priors is None
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_accepts_tuple_of_innovation_scale_priors(self):
+        from impulso.volatility import InnovationScalePrior
+
+        priors = (
+            InnovationScalePrior(family="halfnormal", scale=0.1),
+            InnovationScalePrior(family="halfcauchy", scale=2.5),
+        )
+        adapter = Constant(innovation_scale_priors=priors)
+        assert adapter.innovation_scale_priors == priors
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_round_trips_with_other_fields(self):
+        from impulso.volatility import InnovationScalePrior
+
+        priors = (
+            InnovationScalePrior(family="halfnormal", scale=0.1),
+            InnovationScalePrior(family="exponential", scale=0.4),
+            InnovationScalePrior(family="halfcauchy", scale=3.0),
+        )
+        adapter = Constant(sigma_sd_beta=1.5, tril_offdiag_sigma=0.25, innovation_scale_priors=priors)
+        restored = Constant.model_validate(adapter.model_dump())
+        assert restored == adapter
+        assert restored.innovation_scale_priors == priors
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_round_trip_when_omitted(self):
+        adapter = Constant()
+        restored = Constant.model_validate(adapter.model_dump())
+        assert restored == adapter
+        assert restored.innovation_scale_priors is None
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_nested_validation_rejects_bad_scale_on_model_validate(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            Constant.model_validate({"innovation_scale_priors": [{"family": "halfnormal", "scale": -1.0}]})
+
+
+class TestConstantInnovationScalePriorsBuild:
+    """`build_pymc_latent` with `innovation_scale_priors` set: mismatched
+    lengths, mixed families, and the marginal prior each family produces."""
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_mismatched_length_raises_at_build_time_not_construction(self):
+        import pymc as pm
+
+        from impulso.volatility import InnovationScalePrior
+
+        # Constant does not know n_vars at construction, so this must not raise.
+        priors = (InnovationScalePrior(family="halfnormal", scale=0.1),)
+        adapter = Constant(innovation_scale_priors=priors)
+
+        with pytest.raises(ValueError, match="innovation_scale_priors"), pm.Model():
+            adapter.build_pymc_latent(n_vars=3, T=10)
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_mixed_families_register_one_named_rv_per_variable(self):
+        import pymc as pm
+
+        from impulso.volatility import InnovationScalePrior
+
+        priors = (
+            InnovationScalePrior(family="halfnormal", scale=0.2),
+            InnovationScalePrior(family="halfcauchy", scale=2.5),
+            InnovationScalePrior(family="exponential", scale=0.4),
+        )
+        adapter = Constant(innovation_scale_priors=priors)
+        with pm.Model() as model:
+            L_tensor = adapter.build_pymc_latent(n_vars=3, T=10)
+
+        var_names = {v.name for v in model.unobserved_RVs}
+        assert {"sigma_sd_0", "sigma_sd_1", "sigma_sd_2", "tril_offdiag", "L"} <= var_names
+        assert "sigma_sd" not in var_names
+
+        L_value = L_tensor.eval()
+        assert L_value.shape == (3, 3)
+        np.testing.assert_allclose(np.triu(L_value, k=1), 0.0)
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_n_vars_1_skips_tril_offdiag(self):
+        import pymc as pm
+
+        from impulso.volatility import InnovationScalePrior
+
+        adapter = Constant(innovation_scale_priors=(InnovationScalePrior(family="halfnormal", scale=0.3),))
+        with pm.Model() as model:
+            adapter.build_pymc_latent(n_vars=1, T=10)
+
+        var_names = {v.name for v in model.unobserved_RVs}
+        assert "sigma_sd_0" in var_names
+        assert "tril_offdiag" not in var_names
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_n_vars_2_diagonal_uses_declared_scales(self):
+        """Off-diagonal construction (`tril_offdiag` scaled by `sd[i]`) is unchanged."""
+        import pymc as pm
+
+        from impulso.volatility import InnovationScalePrior
+
+        priors = (
+            InnovationScalePrior(family="halfnormal", scale=0.3),
+            InnovationScalePrior(family="halfcauchy", scale=1.0),
+        )
+        adapter = Constant(innovation_scale_priors=priors)
+        with pm.Model() as model:
+            L_tensor = adapter.build_pymc_latent(n_vars=2, T=10)
+            L_value, sd0, sd1 = pm.draw([L_tensor, model["sigma_sd_0"], model["sigma_sd_1"]], random_seed=42)
+
+        assert L_value.shape == (2, 2)
+        assert L_value[0, 1] == 0.0  # upper-triangular cell stays zero
+        assert L_value[1, 0] != 0.0  # off-diagonal placed in the lower-triangular cell
+        np.testing.assert_array_equal(np.diag(L_value), np.array([sd0, sd1]))
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    @pytest.mark.parametrize(
+        ("family", "scale", "point"),
+        [
+            ("halfnormal", 0.2, 0.35),
+            ("exponential", 0.4, 0.35),
+            ("halfcauchy", 2.5, 0.35),
+        ],
+    )
+    def test_each_family_produces_its_declared_marginal_prior(self, family, scale, point):
+        """Acceptance criterion: each supported family, with a given scale,
+        produces the intended marginal prior on its diagonal element.
+
+        Checked by comparing the registered RV's `pm.logp` to the reference
+        `scipy.stats` density for that family at the same scale -- a
+        deterministic distributional check, not a sampling-based one.
+        """
+        import pymc as pm
+        from scipy import stats
+
+        from impulso.volatility import InnovationScalePrior
+
+        reference = {
+            "halfnormal": stats.halfnorm(scale=scale),
+            "exponential": stats.expon(scale=scale),
+            "halfcauchy": stats.halfcauchy(scale=scale),
+        }[family]
+
+        adapter = Constant(innovation_scale_priors=(InnovationScalePrior(family=family, scale=scale),))
+        with pm.Model() as model:
+            adapter.build_pymc_latent(n_vars=1, T=10)
+
+        logp = pm.logp(model["sigma_sd_0"], point).eval()
+        assert float(logp) == pytest.approx(reference.logpdf(point), rel=1e-6)
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
+    def test_mixed_families_each_diagonal_entry_uses_its_own_declared_family(self):
+        """Same check as above, but with three different families in one model
+        (mixed families across variables must work)."""
+        import pymc as pm
+        from scipy import stats
+
+        from impulso.volatility import InnovationScalePrior
+
+        priors = (
+            InnovationScalePrior(family="halfnormal", scale=0.2),
+            InnovationScalePrior(family="exponential", scale=0.4),
+            InnovationScalePrior(family="halfcauchy", scale=2.5),
+        )
+        adapter = Constant(innovation_scale_priors=priors)
+        with pm.Model() as model:
+            adapter.build_pymc_latent(n_vars=3, T=10)
+
+        point = 0.35
+        references = [
+            stats.halfnorm(scale=0.2),
+            stats.expon(scale=0.4),
+            stats.halfcauchy(scale=2.5),
+        ]
+        for i, reference in enumerate(references):
+            logp = pm.logp(model[f"sigma_sd_{i}"], point).eval()
+            assert float(logp) == pytest.approx(reference.logpdf(point), rel=1e-6)

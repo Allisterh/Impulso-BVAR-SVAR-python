@@ -3,6 +3,8 @@
 import subprocess
 import sys
 
+import pytest
+
 # Driven in a fresh interpreter: enable_runtime_checks() mutates the library's
 # classes in place, so the beartype wrapping must not leak into the rest of the
 # suite. No MCMC — the posterior is synthetic.
@@ -169,6 +171,19 @@ class TestVolatilityPublicAPI:
 
         assert "Constant" in impulso.__all__
         assert "VolatilityProcess" in impulso.__all__
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior not yet public")
+    def test_innovation_scale_prior_importable_from_impulso(self):
+        from impulso import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior as DirectInnovationScalePrior
+
+        assert InnovationScalePrior is DirectInnovationScalePrior
+
+    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior not yet public")
+    def test_innovation_scale_prior_in_all(self):
+        import impulso
+
+        assert "InnovationScalePrior" in impulso.__all__
 
 
 class TestEvidencePublicAPI:
