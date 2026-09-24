@@ -277,6 +277,7 @@ class TestBuildInModel:
 
         assert "p::intercept" in root.named_vars
         assert "p::B" in root.named_vars
+        assert "p::Sigma" in root.named_vars
         assert "p::obs" in root.named_vars
         assert "intercept" not in root.named_vars
         assert "var" in root.coords
@@ -301,6 +302,69 @@ class TestBuildInModel:
         assert "intercept" in model.named_vars
         assert "B" in model.named_vars
         assert "obs" in model.named_vars
+
+    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
+    def test_time_coord_length_mismatch_raises(self, rng):
+        """Two VARs embedded in the same root model must not silently share
+        a stale `time` coordinate when their likelihoods have a different
+        number of rows (review round 1). Coords are not prefixed by a
+        nested `pm.Model(name=...)`, so the second `build_in_model` call
+        would otherwise reuse the first call's `time` coordinate at the
+        wrong length, giving the second likelihood a wrong shape that only
+        surfaces much later (e.g. in `sample_prior_predictive`)."""
+        import pymc as pm
+
+        data_a = _make_data(rng, T=41)  # n_lags=1 -> 40 likelihood rows
+        data_b = _make_data(rng, T=31)  # n_lags=1 -> 30 likelihood rows
+        spec = VAR(lags=1)
+
+        with pm.Model() as root:
+            with pm.Model(name="a"):
+                spec.build_in_model(
+                    endog=data_a.endog,
+                    exog=None,
+                    n_lags=1,
+                    endog_names=data_a.endog_names,
+                )
+            with pytest.raises(ValueError, match="time"), pm.Model(name="b"):
+                spec.build_in_model(
+                    endog=data_b.endog,
+                    exog=None,
+                    n_lags=1,
+                    endog_names=data_b.endog_names,
+                )
+
+        # The first VAR's own registration is untouched by the second call's failure.
+        assert "a::obs" in root.named_vars
+
+    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
+    def test_time_coord_matching_length_is_fine(self, rng):
+        """Equal-length `time` coords — including the wrapper's real dates —
+        are not a collision; only a length mismatch is rejected."""
+        import pymc as pm
+
+        data_a = _make_data(rng, T=41)
+        data_b = _make_data(rng, T=41)  # same T, different values -- fine
+        spec = VAR(lags=1)
+
+        with pm.Model() as root:
+            with pm.Model(name="a"):
+                spec.build_in_model(
+                    endog=data_a.endog,
+                    exog=None,
+                    n_lags=1,
+                    endog_names=data_a.endog_names,
+                )
+            with pm.Model(name="b"):
+                spec.build_in_model(
+                    endog=data_b.endog,
+                    exog=None,
+                    n_lags=1,
+                    endog_names=data_b.endog_names,
+                )
+
+        assert "a::obs" in root.named_vars
+        assert "b::obs" in root.named_vars
 
     @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_endog_scales_overrides_the_default_ar1_residual_sd(self, rng):
