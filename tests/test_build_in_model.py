@@ -1,9 +1,9 @@
-"""Tests for `VAR.build_in_model` (issue 08a).
+"""Tests for `VAR.build_in_model` (issues 08a, 08b).
 
 `VAR._build_pymc_model` becomes a thin wrapper: it opens a fresh
 `pymc.Model`, converts a `VARData` into arrays, and delegates to a new
 public `VAR.build_in_model`, which registers a VAR into whichever PyMC
-model is active on entry. Two kinds of test live here:
+model is active on entry. Several kinds of test live here:
 
 * Parity tests (`TestWrapperLogpParity`, `TestLagDesignMatrixUsage`) exercise
   only the pre-existing `_build_pymc_model` surface and must pass unchanged
@@ -11,6 +11,11 @@ model is active on entry. Two kinds of test live here:
   are not `xfail`-marked.
 * Tests of the new public method (`TestBuildInModel`) exercise
   `VAR.build_in_model` directly.
+* `TestInterceptEquations` (issue 08b) exercises the `intercept_equations`
+  argument: which equations get an intercept term, the `var_intercept`
+  coord that a strict subset needs, and the two edge cases (`None`/every
+  name given -> today's behaviour unchanged; every name excluded -> no
+  intercept variable at all).
 """
 
 import numpy as np
@@ -424,3 +429,241 @@ class TestBuildInModel:
                 endog_names=data.endog_names,
                 endog_scales=np.array([1.0, 0.0]),
             )
+
+
+class TestInterceptEquations:
+    """`build_in_model(..., intercept_equations=...)` (issue 08b).
+
+    `intercept_equations=None` (the default) means every equation gets an
+    intercept — today's behaviour, unchanged. An explicit list restricts
+    the intercept's free variable to that subset; equations left out get a
+    literal zero in `mu` instead of a term. Naming a subset that is not,
+    in fact, every equation (regardless of what order it lists them in)
+    needs its own coord (`var_intercept`) because the free variable is
+    then shorter than `n_vars`; naming every equation collapses back to
+    today's `dims="var"` intercept so existing posteriors and `FittedVAR`
+    keep reading it unchanged.
+    """
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_unknown_name_raises(self, rng):
+        import pymc as pm
+
+        data = _make_data(rng)  # endog_names = ["y1", "y2"]
+        spec = VAR(lags=1)
+
+        with pm.Model(), pytest.raises(ValueError, match="bogus"):
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                intercept_equations=["y1", "bogus"],
+            )
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_duplicate_name_raises(self, rng):
+        import pymc as pm
+
+        data = _make_data(rng)
+        spec = VAR(lags=1)
+
+        with pm.Model(), pytest.raises(ValueError, match="y1"):
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                intercept_equations=["y1", "y1"],
+            )
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_partial_subset_uses_var_intercept_coord_and_dims(self, rng):
+        """A strict subset gets its own `var_intercept` coord, ordered like
+        `endog_names` (canonical order), not like the caller's list."""
+        import pymc as pm
+
+        data = _make_data(rng, n_vars=3)  # y1, y2, y3
+        spec = VAR(lags=1)
+
+        with pm.Model() as model:
+            handles = spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                intercept_equations=["y3", "y1"],
+            )
+
+        assert "var_intercept" in model.coords
+        assert list(model.coords["var_intercept"]) == ["y1", "y3"]
+        assert model.named_vars_to_dims["intercept"] == ("var_intercept",)
+        assert handles.intercept is not None
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_explicit_full_list_keeps_dims_var_no_new_coord(self, rng):
+        """Naming every equation — in any order — collapses to today's
+        `dims="var"` intercept; no `var_intercept` coord is registered, and
+        the log-probability matches the default (`None`) build exactly."""
+        import pymc as pm
+
+        data = _make_data(rng, n_vars=3)
+        spec = VAR(lags=1)
+
+        with pm.Model() as default_model:
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+            )
+        with pm.Model() as explicit_model:
+            handles = spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                intercept_equations=list(reversed(data.endog_names)),
+            )
+
+        assert "var_intercept" not in explicit_model.coords
+        assert explicit_model.named_vars_to_dims["intercept"] == ("var",)
+        assert handles.intercept is not None
+
+        point = default_model.initial_point(random_seed=7)
+        default_logp = float(default_model.compile_logp()(point))
+        explicit_logp = float(explicit_model.compile_logp()(point))
+        assert explicit_logp == pytest.approx(default_logp)
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_excluded_equation_gets_a_literal_zero_not_a_missing_term(self, rng):
+        """Building with only `y1` intercepted must give the same
+        log-probability as building with both intercepted and `y2`'s pinned
+        to exactly `0.0` — i.e. the excluded equation's `mu` really does add
+        a literal zero rather than just omitting the term some other way."""
+        import pymc as pm
+
+        data = _make_data(rng)  # y1, y2
+        spec = VAR(lags=1)
+
+        with pm.Model() as partial_model:
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                intercept_equations=["y1"],
+            )
+        with pm.Model() as full_model:
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+            )
+
+        partial_point = partial_model.initial_point(random_seed=5)
+        full_point = dict(partial_point)
+        full_point["intercept"] = np.array([partial_point["intercept"][0], 0.0])
+
+        partial_logp = float(partial_model.compile_logp()(partial_point))
+        full_logp = float(full_model.compile_logp()(full_point))
+        assert partial_logp == pytest.approx(full_logp)
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_excluded_equation_with_exog_gets_a_literal_zero(self, rng):
+        """Same as above, but with an exogenous block present too, so the
+        `B_exog` branch of `mu`'s construction is covered."""
+        import pymc as pm
+
+        data = _make_data(rng, exog_names=["z"])  # y1, y2
+        spec = VAR(lags=1)
+
+        with pm.Model() as partial_model:
+            spec.build_in_model(
+                endog=data.endog,
+                exog=data.exog,
+                n_lags=1,
+                endog_names=data.endog_names,
+                exog_names=data.exog_names,
+                intercept_equations=["y1"],
+            )
+        with pm.Model() as full_model:
+            spec.build_in_model(
+                endog=data.endog,
+                exog=data.exog,
+                n_lags=1,
+                endog_names=data.endog_names,
+                exog_names=data.exog_names,
+            )
+
+        partial_point = partial_model.initial_point(random_seed=5)
+        full_point = dict(partial_point)
+        full_point["intercept"] = np.array([partial_point["intercept"][0], 0.0])
+
+        partial_logp = float(partial_model.compile_logp()(partial_point))
+        full_logp = float(full_model.compile_logp()(full_point))
+        assert partial_logp == pytest.approx(full_logp)
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_all_excluded_gives_none_intercept_and_no_coord(self, rng):
+        """Excluding every equation is allowed: no intercept variable is
+        registered at all, and `handles.intercept` is `None`."""
+        import pymc as pm
+
+        data = _make_data(rng)
+        spec = VAR(lags=1)
+
+        with pm.Model() as model:
+            handles = spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                intercept_equations=[],
+            )
+
+        assert handles.intercept is None
+        assert "intercept" not in model.named_vars
+        assert "var_intercept" not in model.coords
+
+    @pytest.mark.xfail(strict=True, reason="issue 08b")
+    def test_all_excluded_matches_full_model_with_intercept_pinned_to_zero(self, rng):
+        """No free intercept at all must give the same log-probability as
+        the default build with every intercept pinned to `0.0`."""
+        import pymc as pm
+
+        data = _make_data(rng)
+        spec = VAR(lags=1)
+
+        with pm.Model() as excluded_model:
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                intercept_equations=[],
+            )
+        with pm.Model() as full_model:
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+            )
+
+        excluded_point = excluded_model.initial_point(random_seed=3)
+        full_point = dict(excluded_point)
+        full_point["intercept"] = np.zeros(2)
+
+        excluded_logp = float(excluded_model.compile_logp()(excluded_point))
+        full_logp = float(full_model.compile_logp()(full_point))
+        assert excluded_logp == pytest.approx(full_logp)
+
+    def test_default_none_matches_current_wrapper_logp(self, rng):
+        """Acceptance criterion 1: omitting `intercept_equations` gives the
+        exact same log-probability as the pinned issue-08a wrapper values —
+        default behaviour is unchanged."""
+        data = _make_data(rng)
+        model, _ = VAR(lags=1)._build_pymc_model(data)
+        assert _model_logp(model) == pytest.approx(-225.00961968371863)
