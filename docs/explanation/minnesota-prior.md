@@ -39,16 +39,19 @@ m_{ij}^{(l)} =
 \end{cases}
 $$ (eq-mn-mean)
 
-and a standard deviation built from three multiplicative factors,
+and a standard deviation built from four multiplicative factors,
 
 $$
 s_{ij}^{(l)} = \lambda \cdot d(l) \cdot
-\begin{cases} 1 & i = j \\ \kappa & i \neq j \end{cases},
+\begin{cases} 1 & i = j \\ \kappa & i \neq j \end{cases} \cdot
+\frac{\sigma_i}{\sigma_j},
 \qquad
 d(l) = \begin{cases} 1/l & \texttt{decay="harmonic"} \\ 1/l^{2} & \texttt{decay="geometric"}. \end{cases}
 $$ (eq-mn-sd)
 
-`MinnesotaPrior.build_priors(n_vars, n_lags)` returns {eq}`eq-mn-mean` and {eq}`eq-mn-sd` as the arrays `B_mu` and `B_sigma`, both of shape `(n_vars, n_vars * n_lags)`. `VAR.fit` passes them straight to PyMC as the `mu` and `sigma` of a normal prior on `B`.
+where $\sigma_i$ is the AR(1) residual standard deviation of variable $i$ (`impulso._conjugate.ar1_residual_sd`) — the classical Litterman cross-variable scale, and the same $\sigma$ the conjugate `NIWPrior` already applies via `minnesota_dummies`. On own lags ($i = j$) the ratio is 1, so it changes nothing there; it only rescales cross-lag entries, converting a coefficient's prior from coefficient space into contribution space so it no longer depends on the units the two variables happen to be measured in. See ADR-0015 for the rationale.
+
+`MinnesotaPrior.build_priors(n_vars, n_lags, sigma)` returns {eq}`eq-mn-mean` and {eq}`eq-mn-sd` as the arrays `B_mu` and `B_sigma`, both of shape `(n_vars, n_vars * n_lags)`. `sigma` is required and keyword-only; `VAR.fit` computes it once via `ar1_residual_sd(data.endog)` and passes it here. `VAR.fit` then passes `B_mu`/`B_sigma` straight to PyMC as the `mu` and `sigma` of a normal prior on `B`.
 
 ## Hyperparameters
 
@@ -58,6 +61,8 @@ $$ (eq-mn-sd)
 | `decay` | $d(l)$ | `"harmonic"` | How fast the prior tightens on longer lags. `"harmonic"`: $1/l$. `"geometric"`: $1/l^2$. |
 | `cross_shrinkage` | $\kappa$ | `0.5` | Shrinkage on other variables' lags relative to own lags. $\kappa = 0$ reduces the VAR to $n$ independent AR($p$) models; $\kappa = 1$ treats own and cross lags alike. Must lie in $[0, 1]$. |
 
+$\sigma_i / \sigma_j$ is not a hyperparameter — it is always on, derived from the data, and has no opt-out.
+
 Rough guidance: tighten $\lambda$ as the system grows, since the number of coefficients rises quadratically in $n$ while the sample does not — {cite:t}`giannoneLenzaPrimiceri2015` show the optimal tightness falls with dimension. Prefer `"geometric"` decay when you have many lags and no reason to expect long-cycle dynamics.
 
 ## What the prior implies
@@ -66,7 +71,7 @@ The prior mean is a random walk, whose companion matrix has spectral radius exac
 
 ## Scope and caveats
 
-**No scale adjustment.** The classical Litterman formula multiplies the cross-variable standard deviation by $\sigma_i / \sigma_j$, the ratio of the two variables' residual scales. {eq}`eq-mn-sd` has no such term — `build_priors` receives only `n_vars` and `n_lags` and never sees your data. Put your variables on comparable scales before fitting (standardise them, or express everything in percent). If you want the estimator to handle scaling itself, `NIWPrior` computes per-variable AR(1) residual standard deviations internally.
+**Scale adjustment is always on.** {eq}`eq-mn-sd` includes the classical Litterman $\sigma_i / \sigma_j$ term (ADR-0015), so a cross-lag coefficient's prior is expressed in contribution space rather than raw coefficient space, regardless of the units your variables happen to be measured in. There is no flag to switch it off. Standardising your variables before fitting is no longer necessary for the prior to make sense, though it remains a reasonable habit for reading raw coefficient values. `NIWPrior` has scaled by the same $\sigma$ since it was written, via `minnesota_dummies`.
 
 **Levels, not growth rates.** The mean in {eq}`eq-mn-mean` is a statement about levels. On differenced, de-meaned, or standardised series a prior mean of one on the own first lag is too persistent; the honest centre is nearer zero. Write a custom zero-mean prior instead — see [Writing a Custom Prior](../how-to/custom-priors.md).
 

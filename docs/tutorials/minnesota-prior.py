@@ -162,28 +162,69 @@ _ = plotting.legend_right(ax)
 # $$
 # s_{ij}^{(l)} = \underbrace{\lambda}_{\text{tightness}} \times
 # \underbrace{d(l)}_{\text{lag decay}} \times
-# \underbrace{\begin{cases} 1 & i = j \\ \kappa & i \neq j \end{cases}}_{\text{cross shrinkage}},
+# \underbrace{\begin{cases} 1 & i = j \\ \kappa & i \neq j \end{cases}}_{\text{cross shrinkage}} \times
+# \underbrace{\frac{\sigma_i}{\sigma_j}}_{\text{cross-variable scale}},
 # \qquad
 # d(l) = \begin{cases} 1/l & \texttt{"harmonic"} \\ 1/l^{2} & \texttt{"geometric"}. \end{cases}
 # $$ (eq-minnesota-sd)
 #
-# Read the three factors as three separate beliefs:
+# Read the four factors as four separate beliefs:
 #
 # | Factor | Argument | Default | The belief it encodes |
 # |--------|----------|---------|-----------------------|
 # | $\lambda$ | `tightness` | `0.1` | How far *any* coefficient may stray from its prior mean. $\lambda \to 0$ freezes the model at the random walk; $\lambda \to \infty$ recovers OLS. |
 # | $d(l)$ | `decay` | `"harmonic"` | Distant lags matter less than recent ones, so they get shrunk harder. |
 # | $\kappa$ | `cross_shrinkage` | `0.5` | A variable's own history is more informative about it than other variables' histories. $\kappa = 0$ forbids cross-variable dynamics entirely; $\kappa = 1$ treats own and cross lags alike. |
+# | $\sigma_i / \sigma_j$ | `sigma` (a `build_priors` argument, not a `MinnesotaPrior` field) | `ar1_residual_sd(data.endog)` | A coefficient converts variable $j$'s units into variable $i$'s, so its prior should too. $\sigma_i/\sigma_j = 1$ on own lags ($i=j$); always on, no opt-out. |
 #
-# That is the whole prior. `MinnesotaPrior.build_priors` returns exactly
-# {eq}`eq-minnesota-mean` and {eq}`eq-minnesota-sd` as two arrays, `B_mu` and `B_sigma`,
-# which `VAR.fit` hands straight to PyMC as the mean and standard deviation of a normal
-# prior on `B`.
+# That is the whole prior. `MinnesotaPrior.build_priors(n_vars, n_lags, sigma)` returns
+# exactly {eq}`eq-minnesota-mean` and {eq}`eq-minnesota-sd` as two arrays, `B_mu` and
+# `B_sigma`, which `VAR.fit` hands straight to PyMC as the mean and standard deviation of
+# a normal prior on `B`. `sigma` is required and keyword-only — `VAR.fit` computes it via
+# `ar1_residual_sd(data.endog)`, the same per-variable AR(1) residual standard deviation
+# the conjugate `NIWPrior` already keys its own lag-coefficient prior off of.
+#
+# To isolate the other three knobs from this one, every direct `build_priors` call in the
+# rest of this tutorial passes `sigma=np.ones(n_vars)` — a flat scale, so $\sigma_i/\sigma_j
+# = 1$ everywhere and the numbers below read exactly as they would have before this factor
+# existed. The table just below shows what changes once `sigma` is not flat.
 
 # %%
 prior = MinnesotaPrior()  # tightness=0.1, decay="harmonic", cross_shrinkage=0.5
-params = prior.build_priors(n_vars=3, n_lags=4)
+params = prior.build_priors(n_vars=3, n_lags=4, sigma=np.ones(3))
 {k: v.shape for k, v in params.items()}
+
+# %% [markdown]
+# ### The cross-variable scale in practice
+#
+# `sigma=np.ones(3)` above hides the fourth factor entirely — every ratio is 1. Give
+# `build_priors` a `sigma` that actually varies across variables and the cross-lag entries
+# move while the own-lag entries do not, exactly as {eq}`eq-minnesota-sd` promises.
+
+# %%
+sigma_flat = np.array([1.0, 1.0])
+sigma_hetero = np.array([1.0, 50.0])  # variable 1 is 50x the scale of variable 0
+
+flat_sd = MinnesotaPrior().build_priors(n_vars=2, n_lags=1, sigma=sigma_flat)["B_sigma"]
+hetero_sd = MinnesotaPrior().build_priors(n_vars=2, n_lags=1, sigma=sigma_hetero)["B_sigma"]
+
+pd.DataFrame(
+    {
+        "coefficient": ["own: (0,0)", "cross: (0,1)", "cross: (1,0)", "own: (1,1)"],
+        "sd, sigma=[1, 1]": [flat_sd[0, 0], flat_sd[0, 1], flat_sd[1, 0], flat_sd[1, 1]],
+        "sd, sigma=[1, 50]": [hetero_sd[0, 0], hetero_sd[0, 1], hetero_sd[1, 0], hetero_sd[1, 1]],
+    }
+).set_index("coefficient").round(4)
+
+# %% [markdown]
+# The own-lag rows are identical in both columns — $\sigma_i/\sigma_j = 1$ whenever $i = j$,
+# whatever `sigma` is. The cross-lag rows move in opposite directions: coefficient $(0, 1)$,
+# which converts a one-unit move in the *large*-scale variable 1 into an effect on the
+# *small*-scale variable 0, gets a much tighter prior ($\sigma_0/\sigma_1 = 1/50$); coefficient
+# $(1, 0)$, converting the small-scale variable's move into an effect on the large-scale one,
+# gets a much looser one ($\sigma_1/\sigma_0 = 50$). Under `sigma=[1, 1]` both cross-lag rows
+# were identical at 0.05 — the pre-ADR-0015 behaviour, correct only when both variables
+# happen to share a scale.
 
 # %% [markdown]
 # ## Seeing the prior
@@ -242,7 +283,7 @@ for ax, key, title, cmap in [
 lags = np.arange(1, 9)
 fig, ax = plt.subplots(figsize=(6.5, 4))
 for decay, style in [("harmonic", "-"), ("geometric", "--")]:
-    sd = MinnesotaPrior(decay=decay).build_priors(n_vars=3, n_lags=8)["B_sigma"]
+    sd = MinnesotaPrior(decay=decay).build_priors(n_vars=3, n_lags=8, sigma=np.ones(3))["B_sigma"]
     own = sd[0, (lags - 1) * 3 + 0]  # equation 0, own variable, each lag
     cross = sd[0, (lags - 1) * 3 + 1]  # equation 0, another variable, each lag
     ax.plot(
@@ -289,7 +330,7 @@ def normal_pdf(x, mu, sd):
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 3.6), sharex=True)
 for lam, colour in zip([0.05, 0.1, 0.5], plotting.palette(3), strict=True):
-    sd = MinnesotaPrior(tightness=lam).build_priors(n_vars=3, n_lags=4)["B_sigma"]
+    sd = MinnesotaPrior(tightness=lam).build_priors(n_vars=3, n_lags=4, sigma=np.ones(3))["B_sigma"]
     axes[0].plot(grid, normal_pdf(grid, 1.0, sd[0, 0]), color=colour, label=rf"$\lambda = {lam}$")
     axes[1].plot(grid, normal_pdf(grid, 0.0, sd[0, 1]), color=colour, label=rf"$\lambda = {lam}$")
 axes[0].axvline(1.0, color=plotting.COLORS.hairline, linestyle=":", linewidth=1)
@@ -350,7 +391,7 @@ lambdas = [0.05, 0.2, 1.0]
 
 prior_draws = {}
 for lam in lambdas:
-    pp = MinnesotaPrior(tightness=lam).build_priors(n_vars=N_VARS, n_lags=N_LAGS)
+    pp = MinnesotaPrior(tightness=lam).build_priors(n_vars=N_VARS, n_lags=N_LAGS, sigma=np.ones(N_VARS))
     B_draws = rng.normal(pp["B_mu"], pp["B_sigma"], size=(N_DRAWS, *pp["B_mu"].shape))
     radii = np.array([spectral_radius(B, N_VARS, N_LAGS) for B in B_draws])
     prior_draws[lam] = (B_draws, radii)
@@ -540,10 +581,11 @@ _ = axes[1].legend()
 #
 # On this grid the minimum sits at $\lambda = 0.25$ rather than at the 0.1 default — but look
 # at how flat the bottom of the curve is. Anything from 0.1 to 0.5 lands within two percent of
-# the best forecast score available, whereas $\lambda = 0.02$ costs seven percent, and both
-# extremes roughly double the coefficient error. The lesson is not that 0.25 is the right
-# number. It is that the decision worth making is an *order of magnitude*, and that the flat
-# region is wide enough that a sensible default will not embarrass you.
+# the best forecast score available, whereas $\lambda = 0.02$ costs seven percent, and the
+# coefficient error runs from about 1.9x the best at $\lambda = 0.02$ to about 2.4x at
+# $\lambda = 2.0$ — worse at both extremes, but not symmetrically so. The lesson is not that
+# 0.25 is the right number. It is that the decision worth making is an *order of magnitude*,
+# and that the flat region is wide enough that a sensible default will not embarrass you.
 #
 # Two honest caveats. The right panel shows shrinkage working *against* the truth for
 # `rate on infl(-1)`: its prior mean is 0 but its true value is 0.2, so every step toward a
@@ -570,16 +612,15 @@ _ = axes[1].legend()
 # predictive check above costs nothing and rules out the obviously bad end of the range; the
 # held-out comparison settles the rest.
 #
-# :::{admonition} `MinnesotaPrior` does not rescale by variable
-# :class: warning
-# The classical Litterman formula multiplies the cross-variable standard deviation by
-# $\sigma_i / \sigma_j$, the ratio of residual scales, so that a coefficient linking a
-# variable measured in basis points to one measured in log points is shrunk sensibly.
-# {eq}`eq-minnesota-sd` has no such term — `build_priors` only sees `n_vars` and `n_lags`, never
-# your data. **Put your variables on comparable scales before fitting**, by standardising them
-# or by expressing everything in percent. If you would rather the estimator handle scaling for
-# you, `NIWPrior` computes per-variable AR(1) residual standard deviations internally; see
-# [The Conjugate VAR](conjugate-var.py).
+# :::{admonition} `MinnesotaPrior` rescales by variable automatically
+# :class: note
+# The cross-variable scale factor in {eq}`eq-minnesota-sd`, $\sigma_i / \sigma_j$, is always
+# on (ADR-0015). `VAR.fit` computes `sigma` for you via `ar1_residual_sd(data.endog)` and
+# passes it to `build_priors`, so a coefficient linking a variable measured in basis points
+# to one measured in log points is shrunk sensibly without you doing anything. You no longer
+# need to standardise your variables for the *lag*-coefficient prior to make sense — though
+# calling `build_priors` directly, outside `VAR.fit`, still requires you to supply `sigma`
+# yourself, as every example above does.
 # :::
 #
 # :::{admonition} What the prior does not cover
@@ -598,8 +639,8 @@ _ = axes[1].legend()
 #   whose conjugate structure gives a closed-form marginal likelihood, so the tightness can be
 #   selected rather than assumed ({cite:t}`giannoneLenzaPrimiceri2015`).
 # - **Write your own** — [Writing a Custom Prior](../how-to/custom-priors.md) shows the
-#   ten-line protocol any prior implements, which is how you would build the zero-mean or
-#   scale-aware variants mentioned above.
+#   ten-line protocol any prior implements, which is how you would build the zero-mean
+#   variant mentioned above.
 #
 # ## References
 #

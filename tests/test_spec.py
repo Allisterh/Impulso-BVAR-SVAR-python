@@ -106,7 +106,6 @@ class TestVolatilityParameter:
 class TestPyMCModelBuild:
     """Verify the PyMC model graph composition after the seam refactor."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: build_priors doesn't accept sigma yet")
     def test_model_has_expected_unobserved_rvs(self, var_data_2v):
         """The same set of RVs must exist in the PyMC graph as before the seam."""
         # We don't run MCMC here; we just build the model and inspect.
@@ -300,7 +299,6 @@ class TestExogPriorSigma:
     than passing raw `endog` in.
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_matches_independent_formula(self, rng):
         endog = rng.standard_normal((120, 3))
         exog = rng.standard_normal((120, 2)) * np.array([0.01, 500.0])
@@ -312,7 +310,6 @@ class TestExogPriorSigma:
         assert got.shape == (3, 2)
         np.testing.assert_allclose(got, expected)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_scale_is_linear(self, rng):
         endog = rng.standard_normal((120, 2))
         exog = rng.standard_normal((120, 3))
@@ -323,7 +320,6 @@ class TestExogPriorSigma:
             0.05 * _exog_prior_sigma(sigma, exog, 100.0),
         )
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_tiny_scale_regressor_gets_a_huge_prior_sd(self, rng):
         """The bug: sd 0.01 regressor needs a prior ~100x looser than sd 1.0."""
         endog = rng.standard_normal((120, 2))
@@ -334,7 +330,6 @@ class TestExogPriorSigma:
         ratio = _exog_prior_sigma(sigma, tiny, 100.0) / _exog_prior_sigma(sigma, ordinary, 100.0)
         np.testing.assert_allclose(ratio, 100.0)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_floor_fires_on_a_numerically_flat_column(self, rng):
         """A column with negligible spread falls back to a level-derived scale."""
         from impulso.spec import _EXOG_SD_FLOOR_FRACTION
@@ -353,7 +348,6 @@ class TestExogPriorSigma:
         unfloored = 100.0 * np.outer(sigma, 1.0 / col.std(axis=0, ddof=1))
         assert (got < unfloored / 1e9).all()
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_floor_does_not_fire_on_a_step_dummy(self, rng):
         """A 0/1 break at 75% has real spread, so the raw sd is used."""
         endog = rng.standard_normal((120, 2))
@@ -368,7 +362,6 @@ class TestExogPriorSigma:
         expected = 100.0 * np.outer(sigma, 1.0 / raw_sd)
         np.testing.assert_allclose(_exog_prior_sigma(sigma, dummy, 100.0), expected)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_rejects_column_that_is_all_zero_after_lag_trimming(self, rng):
         endog = rng.standard_normal((120, 2))
         pulse = np.zeros((120, 1))
@@ -377,7 +370,6 @@ class TestExogPriorSigma:
         with pytest.raises(ValueError, match=r"constant over the estimation sample: 'pulse'"):
             _exog_prior_sigma(sigma, pulse, 100.0, ["pulse"])
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_rejects_column_that_is_constant_nonzero_after_lag_trimming(self, rng):
         """The floor must not rescue a column that is flat at a non-zero level.
 
@@ -395,7 +387,6 @@ class TestExogPriorSigma:
             _exog_prior_sigma(sigma, flat, 100.0, ["early_break"])
         assert "reduce `lags`" in str(exc.value)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_constant_column_error_falls_back_to_column_index(self, rng):
         endog = rng.standard_normal((120, 2))
         sigma = ar1_residual_sd(endog)
@@ -423,7 +414,6 @@ class TestExogPriorWiredIntoModel:
             spec.fit(data, sampler=CapturingSampler())
         return captured["model"]
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_b_exog_sigma_matches_the_formula(self, rng):
         endog = rng.standard_normal((150, 2))
         exog = rng.standard_normal((150, 2)) * np.array([0.01, 250.0])
@@ -436,7 +426,6 @@ class TestExogPriorWiredIntoModel:
         # The old bug: a flat unit prior regardless of the regressor's units.
         assert not np.allclose(_captured_sigma(model, "B_exog"), 1.0)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_knob_reaches_the_graph(self, rng):
         endog = rng.standard_normal((150, 2))
         exog = rng.standard_normal((150, 1)) * 0.01
@@ -449,7 +438,6 @@ class TestExogPriorWiredIntoModel:
             _exog_prior_sigma(ar1_residual_sd(endog), exog[1:], 5.0),
         )
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_sigma_uses_lag_trimmed_rows(self, rng):
         """The prior keys off the rows the likelihood sees, not the raw column."""
         endog = rng.standard_normal((150, 2))
@@ -481,7 +469,6 @@ class TestExogPriorWiredIntoModel:
         # Same column with lags=1 keeps the switch, so it is estimable.
         self._capture(data, VAR(lags=1))
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_prior_predictive_graph_carries_the_same_scaled_sigma(self, rng):
         """The graph `prior_predictive` draws from is the graph `fit` samples (#56, #192).
 
@@ -504,7 +491,6 @@ class TestExogPriorWiredIntoModel:
         # cannot drift apart.
         np.testing.assert_allclose(got, _captured_sigma(self._capture(data, spec), "B_exog"))
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_prior_predictive_graph_honours_the_knob(self, rng):
         endog = rng.standard_normal((150, 2))
         exog = rng.standard_normal((150, 1)) * 0.01
@@ -525,7 +511,6 @@ class TestMinnesotaPriorSigmaWiredIntoModel:
     not a unit-scale baseline.
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: build_priors doesn't accept sigma yet")
     def test_b_sigma_matches_ar1_residual_sd_scaling(self, rng):
         endog = rng.standard_normal((150, 3)) * np.array([1.0, 20.0, 0.05])
         data = VARData(

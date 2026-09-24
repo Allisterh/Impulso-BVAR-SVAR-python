@@ -29,16 +29,52 @@ class MinnesotaPrior(ImpulsoModel):
     decay: Literal["harmonic", "geometric"] = "harmonic"
     cross_shrinkage: float = Field(0.5, ge=0, le=1)
 
-    def build_priors(self, n_vars: int, n_lags: int) -> dict[str, np.ndarray]:
+    def build_priors(self, n_vars: int, n_lags: int, *, sigma: np.ndarray) -> dict[str, np.ndarray]:
         """Build prior mean and standard deviation arrays for VAR coefficients.
+
+        The prior standard deviation on the coefficient linking lag `l` of
+        variable `j` to the equation for variable `i` is scaled by
+        `sigma[i] / sigma[j]` — the textbook Minnesota/Litterman cross-lag
+        form, and the same ratio the conjugate `NIWPrior` already applies via
+        `minnesota_dummies`. On own lags (`i == j`) the ratio is `sigma[i] /
+        sigma[i]`, which is 1 for any finite nonzero `sigma[i]`, so this
+        leaves the own-lag standard deviations unchanged; it only rescales
+        cross-lag entries. That "1" breaks down if `sigma[i]` is *exactly*
+        zero (`0.0 / 0.0` is `nan`, not 1) — see the warning below. See
+        docs/adr/0015 for why the scaling itself is always on, with no
+        opt-out.
+
+        Warning:
+            A near-zero `sigma[c]` (e.g. `data.endog[:, c]` is constant or
+            numerically flat) is not guarded against here. It breaks the
+            prior in more than one place: every cross-lag entry in row `c`
+            (`sigma[c]` in the numerator) collapses toward zero; every
+            cross-lag entry in every *other* row that references variable
+            `c`'s lag (`sigma[c]` in the denominator) blows up instead — into
+            the `1e12`-`1e14` range for an otherwise-ordinary numerically
+            near-constant column, or to `inf` if `sigma[c]` is exactly zero;
+            and if `sigma[c]` is exactly zero, the own-lag entry `B_sigma[c,
+            c]` is `0.0 / 0.0`, i.e. `nan`, not the unscaled value the "ratio
+            is 1 on own lags" description above promises. Guarding this is
+            tracked as issue 07b, not fixed here.
 
         Args:
             n_vars: Number of endogenous variables.
             n_lags: Number of lags.
+            sigma: Per-variable scale, shape `(n_vars,)` — typically
+                `impulso._conjugate.ar1_residual_sd(data.endog)`. Required and
+                keyword-only (see `Prior.build_priors`).
 
         Returns:
             Dictionary with keys 'B_mu' and 'B_sigma' as numpy arrays.
+
+        Raises:
+            ValueError: If `sigma` does not have length `n_vars`.
         """
+        sigma = np.asarray(sigma, dtype=float)
+        if sigma.shape != (n_vars,):
+            raise ValueError(f"sigma must have shape ({n_vars},) to match n_vars={n_vars}, got shape {sigma.shape}")
+
         n_coeffs = n_vars * n_lags
 
         # B_mu: identity on the first lag block, zero elsewhere
@@ -55,7 +91,18 @@ class MinnesotaPrior(ImpulsoModel):
         is_own = col_var[np.newaxis, :] == np.arange(n_vars)[:, np.newaxis]
         cross_mask = np.where(is_own, 1.0, self.cross_shrinkage)
 
-        B_sigma = self.tightness * decay_per_col[np.newaxis, :] * cross_mask
+        # sigma[i] / sigma[j]: 1.0 on own lags (i == j) as long as sigma[i] is
+        # finite and nonzero, the Litterman ratio on cross lags. Not guarded
+        # against sigma == 0 (a constant endogenous column): a near-zero
+        # sigma[c] both collapses row c toward zero (sigma[c] in the
+        # numerator) and blows up column c in every other row (sigma[c] in
+        # the denominator, to inf if sigma[c] is exactly 0.0) -- and an
+        # exactly-zero sigma[c] makes the own-lag entry B_sigma[c, c] itself
+        # 0.0 / 0.0 = nan, not the unscaled value the comment above implies.
+        # See docs/adr/0015 and the class docstring; guarded in issue 07b.
+        scale_ratio = sigma[:, np.newaxis] / sigma[col_var][np.newaxis, :]
+
+        B_sigma = self.tightness * decay_per_col[np.newaxis, :] * cross_mask * scale_ratio
 
         return {"B_mu": B_mu, "B_sigma": B_sigma}
 

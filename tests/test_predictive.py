@@ -178,7 +178,6 @@ class TestPriorPredictive:
         assert "B_exog" in idata.prior
         assert idata.prior["B_exog"].shape == (1, 10, 2, 1)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_b_exog_draws_use_the_scale_adaptive_prior(self, var_data_2v_exog):
         """The simulated `B_exog` spreads at `_exog_prior_sigma`, not at 1 (#192).
 

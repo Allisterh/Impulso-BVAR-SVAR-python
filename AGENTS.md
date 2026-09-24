@@ -69,7 +69,7 @@ VARData → VAR.fit() → FittedVAR → .set_identification_strategy() → Ident
 
 Three `Protocol` classes in `protocols.py` define the extension points:
 
-- **`Prior`**: must implement `build_priors(n_vars, n_lags) → dict`. Concrete: `MinnesotaPrior`.
+- **`Prior`**: must implement `build_priors(n_vars, n_lags, *, sigma) → dict`. Concrete: `MinnesotaPrior`.
 - **`Sampler`**: must implement `sample(model) → InferenceData`. Concrete: `NUTSSampler`.
 - **`IdentificationScheme`**: must implement `identify(idata, var_names) → InferenceData`. Concrete: `Cholesky`, `SignRestriction`.
 
