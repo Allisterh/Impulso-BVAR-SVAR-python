@@ -171,6 +171,55 @@ class TestVARDataExogVariation:
             VARData.from_df(df, endog=["gdp", "inflation", "rate"], exog=["const"])
 
 
+class TestVARDataEndogVariation:
+    """Exactly-constant endog columns are structurally degenerate for any VAR
+    estimator, and collapse `MinnesotaPrior`'s cross-lag scaling once it keys off
+    each column's AR(1) residual sd, sigma_i/sigma_j (docs/adr/0015, issue 07b).
+    """
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: constant endog columns not yet rejected")
+    @pytest.mark.parametrize("fill", [1.0, 0.0, -3.5])
+    def test_rejects_constant_endog_column(self, sample_index, fill):
+        endog = np.column_stack([np.full(100, fill), np.arange(100, dtype=float)])
+        with pytest.raises(ValueError, match=r"constant columns: 'level'"):
+            VARData(endog=endog, endog_names=["level", "trend"], index=sample_index)
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: constant endog columns not yet rejected")
+    def test_error_names_every_constant_column_and_points_at_the_fix(self, sample_index, rng):
+        endog = np.column_stack([np.ones(100), rng.standard_normal(100), np.zeros(100)])
+        with pytest.raises(ValueError, match=r"constant columns: 'ones', 'zeros'") as exc:
+            VARData(endog=endog, endog_names=["ones", "varying", "zeros"], index=sample_index)
+        assert "no residual variance" in str(exc.value)
+
+    def test_accepts_column_that_varies_only_once(self, sample_index, rng):
+        """A step shift varies within the sample, so it is identified."""
+        step = np.zeros(100)
+        step[75:] = 1.0
+        endog = np.column_stack([step, rng.standard_normal(100)])
+        data = VARData(endog=endog, endog_names=["step", "y"], index=sample_index)
+        assert data.endog.shape == (100, 2)
+
+    def test_accepts_near_constant_column(self, sample_index, rng):
+        """Only exactly-constant columns are rejected; tiny variation is legal."""
+        col = 1.0 + 1e-13 * rng.standard_normal(100)
+        endog = np.column_stack([col, rng.standard_normal(100)])
+        data = VARData(endog=endog, endog_names=["almost_flat", "y"], index=sample_index)
+        assert data.endog.shape == (100, 2)
+
+    def test_nonfinite_endog_still_reports_nan_not_constant(self, sample_index, rng):
+        bad = np.column_stack([np.full(100, np.nan), rng.standard_normal(100)])
+        with pytest.raises(ValueError, match="NaN or Inf"):
+            VARData(endog=bad, endog_names=["broken", "y"], index=sample_index)
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: constant endog columns not yet rejected")
+    def test_from_df_rejects_constant_endog_column(self, rng):
+        index = pd.date_range("2000-01-01", periods=100, freq="QS")
+        df = pd.DataFrame(rng.standard_normal((100, 3)), columns=["gdp", "inflation", "rate"], index=index)
+        df["gdp"] = 5.0
+        with pytest.raises(ValueError, match=r"constant columns: 'gdp'"):
+            VARData.from_df(df, endog=["gdp", "inflation", "rate"])
+
+
 class TestVARDataNameUniqueness:
     def test_rejects_duplicate_endog_names(self, sample_endog, sample_index):
         with pytest.raises(ValueError, match=r"endog_names must be unique, got duplicates: 'gdp'"):

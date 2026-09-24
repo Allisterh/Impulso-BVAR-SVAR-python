@@ -540,6 +540,81 @@ class TestMinnesotaPriorSigmaWiredIntoModel:
         assert not np.allclose(got, baseline)
 
 
+class TestValidateSigmaIsUsable:
+    """`_validate_sigma_is_usable` guards the shared `sigma` before it reaches
+    `Prior.build_priors` or `_exog_prior_sigma` (issue 07b).
+    """
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: _validate_sigma_is_usable does not exist yet")
+    def test_rejects_zero_entry_and_names_the_column(self):
+        from impulso.spec import _validate_sigma_is_usable
+
+        sigma = np.array([1.0, 0.0, 2.0])
+        with pytest.raises(ValueError, match=r"'y2'"):
+            _validate_sigma_is_usable(sigma, ["y1", "y2", "y3"])
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: _validate_sigma_is_usable does not exist yet")
+    @pytest.mark.parametrize("bad_value", [0.0, -1.0, np.nan, np.inf])
+    def test_rejects_non_positive_or_non_finite(self, bad_value):
+        from impulso.spec import _validate_sigma_is_usable
+
+        sigma = np.array([1.0, bad_value])
+        with pytest.raises(ValueError, match="zero, negative, or non-finite"):
+            _validate_sigma_is_usable(sigma, ["y1", "y2"])
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: _validate_sigma_is_usable does not exist yet")
+    def test_accepts_all_positive_finite(self):
+        from impulso.spec import _validate_sigma_is_usable
+
+        _validate_sigma_is_usable(np.array([1.0, 1e-10, 5.0]), ["y1", "y2", "y3"])  # must not raise
+
+
+class TestBuildPymcModelRejectsDegenerateSigma:
+    """`_build_pymc_model` validates the `sigma` it computes before handing it to
+    the prior or `_exog_prior_sigma` (issue 07b). A column need not be literally
+    constant to trigger this: an exactly-determined AR(1) fit (a very short,
+    noiseless sample) can also give `sigma == 0` for a column `VARData` accepts
+    because it does vary.
+    """
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: sigma is not yet validated in _build_pymc_model")
+    def test_rejects_a_column_with_exactly_zero_ar1_residual_sd(self):
+        # 3 rows makes the AR(1) fit (intercept + own lag = 2 parameters against 2
+        # data points) exactly determined, so its residual is exactly zero -- for
+        # y2 here, bit-for-bit, despite y2 not being constant (values 5, 3, -7).
+        endog = np.array([[0.0, 5.0], [1.0, 3.0], [2.0, -7.0]])
+        sigma = ar1_residual_sd(endog)
+        assert sigma[1] == 0.0, "fixture no longer exercises an exact-zero sigma"
+        data = VARData(
+            endog=endog,
+            endog_names=["y1", "y2"],
+            index=pd.date_range("2000-01-01", periods=3, freq="QS"),
+        )
+        spec = VAR(lags=1)
+
+        with pytest.raises(ValueError, match=r"'y2'"):
+            spec._build_pymc_model(data)
+
+    def test_prior_predictive_accepts_a_near_constant_column(self, rng):
+        """A column that varies, however little, is not rejected (criterion 2)."""
+        near_constant = 1.0 + 1e-12 * rng.standard_normal(150)
+        ordinary = rng.standard_normal(150)
+        endog = np.column_stack([near_constant, ordinary])
+        data = VARData(
+            endog=endog,
+            endog_names=["almost_flat", "y"],
+            index=pd.date_range("2000-01-01", periods=150, freq="QS"),
+        )
+        spec = VAR(lags=1)
+
+        model, _ = spec._build_pymc_model(data)
+        got = _captured_sigma(model, "B")
+        assert np.isfinite(got).all()
+        # The near-constant column's cross-lag ratio really is huge -- accepted,
+        # not floored (docs/adr/0015).
+        assert got.max() > 1e6
+
+
 def _capture_model(var_data, **var_kwargs):
     """Build the production PyMC graph via VAR.fit, aborting before MCMC."""
     import pymc as pm

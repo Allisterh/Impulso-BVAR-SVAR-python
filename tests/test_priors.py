@@ -178,3 +178,34 @@ class TestMinnesotaPriorCrossLagScaling:
         assert rescaled[0, 2] == pytest.approx(base[0, 2] * c)
         # Own lag (i=0, j=0) is untouched by either rescaling — ratio stays 1.
         assert rescaled[0, 0] == pytest.approx(base[0, 0])
+
+
+class TestMinnesotaPriorRejectsDegenerateSigma:
+    """`build_priors` validates a directly supplied `sigma` (issue 07b): a zero,
+    negative, or non-finite entry would blow up the cross-lag ratio it feeds --
+    collapsing that variable's own row and sending every other row's coefficient
+    on its lag to inf, with the own-lag entry itself becoming 0.0 / 0.0 = nan.
+    """
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: build_priors does not yet validate sigma")
+    @pytest.mark.parametrize("bad_value", [0.0, -1.0, np.nan, np.inf, -np.inf])
+    def test_rejects_non_positive_or_non_finite_entry(self, bad_value):
+        prior = MinnesotaPrior()
+        sigma = np.array([1.0, bad_value, 2.0])
+        with pytest.raises(ValueError, match="finite and strictly positive"):
+            prior.build_priors(n_vars=3, n_lags=2, sigma=sigma)
+
+    @pytest.mark.xfail(strict=True, reason="issue 07b: build_priors does not yet validate sigma")
+    def test_error_names_the_offending_index(self):
+        prior = MinnesotaPrior()
+        with pytest.raises(ValueError, match=r"sigma\[1\]"):
+            prior.build_priors(n_vars=3, n_lags=1, sigma=np.array([1.0, 0.0, 2.0]))
+
+    def test_accepts_tiny_but_positive_sigma(self):
+        """A near-zero (but nonzero, finite) sigma is accepted, not rejected --
+        it produces a very large but finite cross-lag ratio (see the class
+        Warning), which is a different case from the degenerate one above.
+        """
+        prior = MinnesotaPrior()
+        result = prior.build_priors(n_vars=2, n_lags=1, sigma=np.array([1.0, 1e-15]))
+        assert np.isfinite(result["B_sigma"]).all()
