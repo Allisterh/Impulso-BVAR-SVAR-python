@@ -48,11 +48,11 @@ def _validate_sigma_is_usable(sigma: np.ndarray, endog_names: Sequence[str]) -> 
     """Reject a per-variable scale that would break every prior dividing by it (issue 07b).
 
     `sigma` (`ar1_residual_sd(endog)`, or the caller's `endog_scales`) is resolved
-    once in `VAR.build_in_model` and shared by `Prior.build_priors` — whose Minnesota cross-lag entries scale by
-    `sigma[i] / sigma[j]` (docs/adr/0015) — and by `_exog_prior_sigma` below. A zero
-    entry collapses that column's own row of the coefficient prior toward zero,
-    sends every other row's coefficient on its lag to `inf`, and turns the own-lag
-    entry into `0.0 / 0.0 = nan`.
+    once in `VAR.build_in_model` and shared by `Prior.build_priors` — whose
+    Minnesota cross-lag entries scale by `sigma[i] / sigma[j]` (docs/adr/0015) —
+    and by `_exog_prior_sigma` below. A zero entry collapses that column's own row
+    of the coefficient prior toward zero, sends every other row's coefficient on
+    its lag to `inf`, and turns the own-lag entry into `0.0 / 0.0 = nan`.
 
     `VARData` already rejects endogenous columns that are exactly constant over the
     whole sample, which is the common way a column ends up here with `sigma == 0`.
@@ -394,7 +394,12 @@ class VAR(ImpulsoBaseModel):
         VAR's variable labelling per model — two VARs with different
         `endog_names`/`exog_names` embedded in the same model will collide
         on `var`/`coeff`/`exog` (identical labels are shared silently;
-        different labels raise `ValueError`).
+        different labels raise `ValueError`). `"time"` is a coordinate too,
+        so it is subject to the same sharing: two VARs embedded in the same
+        model must agree on its *length* (see "Time coordinate" below) —
+        checked explicitly, because `add_coords` alone only rejects a
+        duplicate coordinate whose *values* differ, not one whose length
+        happens to differ while its (unlabelled) content still matches.
 
         Time coordinate: the likelihood is registered with `dims=("time",
         "var")`, and PyMC requires an *observed* multivariate RV's named
@@ -405,7 +410,12 @@ class VAR(ImpulsoBaseModel):
         `"time"` from `data.index` before calling this method, so `fit` and
         `prior_predictive` keep real dates; a caller invoking this method
         directly gets the positional fallback unless it registers `"time"`
-        itself first.
+        itself first. If the active model *already* carries a `"time"`
+        coordinate — this VAR's own wrapper, or a second VAR embedded in
+        the same model — and its length does not match this call's number
+        of likelihood rows (`T - n_lags`), this method raises `ValueError`
+        rather than silently reusing the wrong length; equal length is
+        fine regardless of the actual values.
 
         Args:
             endog: Endogenous data, shape `(T, n_vars)`.
@@ -430,6 +440,10 @@ class VAR(ImpulsoBaseModel):
             volatility and likelihood variables this call registered.
 
         Raises:
+            ValueError: If the active model already carries a `"time"`
+                coordinate whose length does not match this call's number
+                of likelihood rows (`T - n_lags`) — see "Time coordinate"
+                above.
             ValueError: If any entry of the scale — computed or supplied via
                 `endog_scales` — is zero, negative or non-finite (issue 07b).
         """
@@ -479,7 +493,30 @@ class VAR(ImpulsoBaseModel):
         }
         if exog_names is not None:
             coords["exog"] = list(exog_names)
-        if "time" not in model.coords:
+        if "time" in model.coords:
+            # A previous call (this VAR's own wrapper, or a second VAR
+            # embedded in the same model — coords are not prefixed by a
+            # nested `pm.Model(name=...)`, see the docstring above) already
+            # registered "time". `add_coords` only rejects a duplicate coord
+            # whose *values* differ, and a plain length mismatch has equal
+            # odds of matching by chance as differing, so silently reusing
+            # it would either pass by luck or hand the likelihood a "time"
+            # dim of the wrong length — a shape error that would only
+            # surface much later, e.g. inside `sample_prior_predictive`.
+            # Reject it here instead, at the point that actually knows both
+            # lengths.
+            existing_length = int(model.dim_lengths["time"].eval())
+            if existing_length != Y.shape[0]:
+                raise ValueError(
+                    f"the active model already has a 'time' coordinate of length "
+                    f"{existing_length}, but this call's likelihood has {Y.shape[0]} rows "
+                    "(T - n_lags). Coordinates are not prefixed by a nested "
+                    "pm.Model(name=...), so two VARs embedded in the same model share a "
+                    "single 'time' coordinate and must agree on its length. Give both VARs "
+                    "the same number of likelihood rows, or build them in separate "
+                    "pm.Model() instances."
+                )
+        else:
             # PyMC requires a named dim used on an *observed* multivariate RV
             # to already exist (unlike a free RV's `dims`, which it will
             # auto-register). `_build_pymc_model` pre-registers "time" from
