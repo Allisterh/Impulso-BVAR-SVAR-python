@@ -3,8 +3,6 @@
 import subprocess
 import sys
 
-import pytest
-
 # Driven in a fresh interpreter: enable_runtime_checks() mutates the library's
 # classes in place, so the beartype wrapping must not leak into the rest of the
 # suite. No MCMC — the posterior is synthetic.
@@ -221,16 +219,14 @@ class TestErrorDistributionPublicAPI:
 
 
 class TestAr1ResidualSdPublicAPI:
-    """`ar1_residual_sd` must become importable from the public namespace (issue 03)."""
+    """`ar1_residual_sd` is importable from the public namespace (issue 03)."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 03: ar1_residual_sd not yet public")
     def test_ar1_residual_sd_importable_from_impulso(self):
         from impulso import ar1_residual_sd
         from impulso._conjugate import ar1_residual_sd as direct
 
         assert ar1_residual_sd is direct
 
-    @pytest.mark.xfail(strict=True, reason="issue 03: ar1_residual_sd not yet public")
     def test_ar1_residual_sd_in_all(self):
         import impulso
 
