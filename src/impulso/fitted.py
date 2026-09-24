@@ -101,13 +101,12 @@ class FittedVAR(ImpulsoBaseModel):
         """Wrap a posterior estimated elsewhere into a validated `FittedVAR`.
 
         The public, validated alternative to `FittedVAR.model_construct`,
-        which today's two estimators call directly and which trusts its
-        arguments blindly. This validates the posterior's `posterior` group
-        against the schema `VAR.fit` and `ConjugateVAR.fit` both produce —
-        see `impulso._posterior_validation` — before constructing. Issue 04b
-        moves both estimators onto this constructor; as of this issue they
-        still call `model_construct` directly, so nothing about their
-        behaviour changes yet.
+        which trusts its arguments blindly. This validates the posterior's
+        `posterior` group against the schema `VAR.fit` and `ConjugateVAR.fit`
+        both produce — see `impulso._posterior_validation` — before
+        constructing. Both estimators construct their result through this
+        method (issue 04b), so a posterior that breaks the schema now raises
+        here instead of silently producing a malformed `FittedVAR`.
 
         Args:
             idata: InferenceData-schema container with a `posterior` group.

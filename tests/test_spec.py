@@ -699,7 +699,6 @@ class TestVarFitValidatesPosteriorSchema:
     surface `from_posterior`'s `ValueError` rather than silently producing a
     malformed `FittedVAR`."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 04b: VAR.fit still constructs via model_construct")
     def test_posterior_missing_volatility_seam_raises(self, var_data_2v):
         """A sampler posterior missing `L` (the volatility seam) must raise,
         not silently return a `FittedVAR` that breaks on first use."""

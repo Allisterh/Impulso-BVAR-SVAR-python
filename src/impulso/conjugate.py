@@ -197,11 +197,10 @@ class ConjugateVAR(ImpulsoBaseModel):
         # law at all (the t is a scale mixture, which breaks conjugacy — it
         # would need a per-observation latent scale and a Gibbs step). Heavy
         # tails are a PyMC/NUTS-path feature; see ADR-0007.
-        return FittedVAR.model_construct(
-            idata=idata,
-            n_lags=self.lags,
-            data=data,
-            var_names=data.endog_names,
+        return FittedVAR.from_posterior(
+            idata,
+            data,
+            self.lags,
             volatility=volatility,
             evidence=evidence,
         )

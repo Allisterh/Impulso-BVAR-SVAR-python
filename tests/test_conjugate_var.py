@@ -208,7 +208,6 @@ def test_accepts_pandemic_break_hyperparameters():
     assert model.volatility is break_
 
 
-@pytest.mark.xfail(strict=True, reason="issue 04b: ConjugateVAR.fit still constructs via model_construct")
 def test_malformed_conjugate_posterior_raises(monkeypatch):
     """ConjugateVAR.fit constructs its result through `FittedVAR.from_posterior`
     (issue 04b), so a posterior that breaks the shared schema must raise, not
