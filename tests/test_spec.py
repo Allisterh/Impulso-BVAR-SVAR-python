@@ -855,6 +855,69 @@ class TestVarFitValidatesPosteriorSchema:
             VAR(lags=1).fit(var_data_2v, sampler=StubSampler())
 
 
+def _captured_mu(model):
+    """The `mu` tensor feeding the observed `obs` likelihood.
+
+    `dist_params` maps the RV's op back onto its distribution parameters —
+    `mu` is always the first one, for both `MvNormal` and `MvStudentT` — so
+    this survives the positional reshuffles PyMC makes to `owner.inputs`.
+    """
+    rv = model["obs"]
+    return rv.owner.op.dist_params(rv.owner)[0]
+
+
+class TestLagStackingParity:
+    """Pins the numeric contract of the lag-major design matrix `VAR` bakes
+    into its PyMC graph (issue 02).
+
+    Deliberately does not call any private stacking helper: it reconstructs
+    `X_lag`/`X_exog` by hand and compares against `mu`, the conditional-mean
+    tensor the observed likelihood is built from. That makes it a parity
+    test in the strict sense — it exercises only the public `VAR.fit`
+    surface and passes unchanged whether the stacking is inlined in
+    `_build_pymc_model` or delegated to a shared builder.
+    """
+
+    @pytest.mark.parametrize("n_lags", [1, 2, 3])
+    def test_mu_matches_hand_stacked_design_matrix(self, rng, n_lags):
+        import pymc as pm
+
+        endog = rng.standard_normal((40, 3))
+        index = pd.date_range("2000-01-01", periods=40, freq="QS")
+        data = VARData(endog=endog, endog_names=["y1", "y2", "y3"], index=index)
+
+        model = _capture_model(data, lags=n_lags)
+        mu = _captured_mu(model)
+
+        intercept_draw, b_draw, mu_draw = pm.draw([model["intercept"], model["B"], mu], random_seed=0)
+
+        x_parts = [endog[n_lags - lag : -lag] for lag in range(1, n_lags + 1)]
+        x_lag_expected = np.hstack(x_parts)
+        expected_mu = intercept_draw + x_lag_expected @ b_draw.T
+        np.testing.assert_allclose(mu_draw, expected_mu)
+
+    def test_mu_matches_with_exog(self, rng):
+        import pymc as pm
+
+        n_lags = 2
+        endog = rng.standard_normal((40, 2))
+        exog = rng.standard_normal((40, 1))
+        data = _exog_data(endog, exog, ["z"])
+
+        model = _capture_model(data, lags=n_lags)
+        mu = _captured_mu(model)
+
+        intercept_draw, b_draw, b_exog_draw, mu_draw = pm.draw(
+            [model["intercept"], model["B"], model["B_exog"], mu], random_seed=0
+        )
+
+        x_parts = [endog[n_lags - lag : -lag] for lag in range(1, n_lags + 1)]
+        x_lag_expected = np.hstack(x_parts)
+        x_exog_expected = exog[n_lags:]
+        expected_mu = intercept_draw + x_lag_expected @ b_draw.T + x_exog_expected @ b_exog_draw.T
+        np.testing.assert_allclose(mu_draw, expected_mu)
+
+
 class TestVolatilityShorthandSV:
     def test_sv_string_resolves_to_stochastic_volatility(self):
         from impulso.spec import VAR

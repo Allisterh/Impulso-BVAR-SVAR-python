@@ -3,6 +3,8 @@
 import subprocess
 import sys
 
+import pytest
+
 # Driven in a fresh interpreter: enable_runtime_checks() mutates the library's
 # classes in place, so the beartype wrapping must not leak into the rest of the
 # suite. No MCMC — the posterior is synthetic.
@@ -92,6 +94,12 @@ class TestPublicAPI:
         from impulso import select_lag_order
 
         assert select_lag_order is not None
+
+    @pytest.mark.xfail(strict=True, reason="issue 02: build_lag_design_matrix not yet exported from impulso")
+    def test_build_lag_design_matrix_importable(self):
+        from impulso import build_lag_design_matrix
+
+        assert callable(build_lag_design_matrix)
 
     def test_enable_runtime_checks_importable(self):
         from impulso import enable_runtime_checks
