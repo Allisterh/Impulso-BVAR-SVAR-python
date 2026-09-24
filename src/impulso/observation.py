@@ -110,6 +110,31 @@ class Gaussian(ImpulsoModel):
 
         return pm.MvNormal(name, mu=mu, chol=chol, observed=observed, dims=dims)
 
+    def logp(
+        self,
+        mu: Any,
+        chol: Any,
+        value: Any,
+    ) -> Any:
+        """Symbolic log-density of `value` under the multivariate normal.
+
+        Equal to `pm.logp` of the distribution `build_likelihood` registers,
+        summed over time.
+
+        Args:
+            mu: Conditional mean tensor, shape `(T, n_vars)`.
+            chol: Lower-triangular Cholesky factor of Ω, shape
+                `(n_vars, n_vars)` or `(T, n_vars, n_vars)`.
+            value: Endogenous matrix, observed or a symbolic latent, shape
+                `(T, n_vars)`.
+
+        Returns:
+            Scalar symbolic log-density, summed over time.
+        """
+        import pymc as pm
+
+        return pm.logp(pm.MvNormal.dist(mu=mu, chol=chol), value).sum()
+
     def draw_standardised_innovations(
         self,
         shape: tuple[int, ...],
@@ -226,6 +251,34 @@ class StudentT(ImpulsoModel):
             )
         return self
 
+    def _nu_tensor(self) -> Any:
+        """Register (or reconstruct) the `nu` Deterministic in the active model.
+
+        Shared by `build_likelihood` and `logp` so both entry points
+        register identical auxiliary variables — same names, same priors —
+        regardless of which one is used to build the model. Registers nu as
+        a `Deterministic` named `"nu"` in both modes, so the posterior
+        always carries the degrees of freedom and downstream code never has
+        to know whether they were fixed or inferred. When `nu="infer"`, the
+        free random variable is the *excess* degrees of freedom
+        `nu_excess ~ Gamma(prior_alpha, prior_beta)` and `nu = 2 + nu_excess`.
+        The shift (rather than a truncation) is deliberate: `Gamma(alpha, ·)`
+        has zero density at the origin for any `alpha > 1` — which the
+        validator enforces — so the prior vanishes exactly where
+        `nu/(nu-2)` blows up, and the unconstrained NUTS transform is the
+        standard positive-support one.
+
+        Returns:
+            Scalar PyTensor variable, the degrees of freedom.
+        """
+        import pymc as pm
+        import pytensor.tensor as pt
+
+        if isinstance(self.nu, str):
+            nu_excess = pm.Gamma("nu_excess", alpha=self.prior_alpha, beta=self.prior_beta)
+            return pm.Deterministic("nu", pt.add(nu_excess, self.NU_LOWER))
+        return pm.Deterministic("nu", pt.as_tensor(float(self.nu)))
+
     def build_likelihood(
         self,
         name: str,
@@ -236,16 +289,8 @@ class StudentT(ImpulsoModel):
     ) -> Any:
         """Register the multivariate Student-t likelihood in the active PyMC model.
 
-        Registers nu as a `Deterministic` named `"nu"` in both modes, so the
-        posterior always carries the degrees of freedom and downstream code
-        never has to know whether they were fixed or inferred. When
-        `nu="infer"`, the free random variable is the *excess* degrees of
-        freedom `nu_excess ~ Gamma(prior_alpha, prior_beta)` and
-        `nu = 2 + nu_excess`. The shift (rather than a truncation) is
-        deliberate: `Gamma(alpha, ·)` has zero density at the origin for any
-        `alpha > 1` — which the validator enforces — so the prior vanishes
-        exactly where `nu/(nu-2)` blows up, and the unconstrained NUTS
-        transform is the standard positive-support one.
+        See `_nu_tensor` for how nu is registered under fixed and inferred
+        parameterisations.
 
         `chol` is passed straight through, so the manual Cholesky
         parameterisation the volatility seam builds carries over verbatim
@@ -263,15 +308,37 @@ class StudentT(ImpulsoModel):
             The registered PyMC random variable.
         """
         import pymc as pm
-        import pytensor.tensor as pt
 
-        if isinstance(self.nu, str):
-            nu_excess = pm.Gamma("nu_excess", alpha=self.prior_alpha, beta=self.prior_beta)
-            nu = pm.Deterministic("nu", pt.add(nu_excess, self.NU_LOWER))
-        else:
-            nu = pm.Deterministic("nu", pt.as_tensor(float(self.nu)))
-
+        nu = self._nu_tensor()
         return pm.MvStudentT(name, nu=nu, mu=mu, chol=chol, observed=observed, dims=dims)
+
+    def logp(
+        self,
+        mu: Any,
+        chol: Any,
+        value: Any,
+    ) -> Any:
+        """Symbolic log-density of `value` under the multivariate Student-t.
+
+        Registers the same `nu_excess`/`nu` auxiliary variables that
+        `build_likelihood` registers (see `_nu_tensor`), so a model built
+        via `logp` carries an identical posterior to one built via
+        `build_likelihood`. `chol` is passed straight through as the
+        scale-matrix factor, per ADR-0007.
+
+        Args:
+            mu: Conditional mean tensor, shape `(T, n_vars)`.
+            chol: Lower-triangular Cholesky factor of the scale matrix Ω.
+            value: Endogenous matrix, observed or a symbolic latent, shape
+                `(T, n_vars)`.
+
+        Returns:
+            Scalar symbolic log-density, summed over time.
+        """
+        import pymc as pm
+
+        nu = self._nu_tensor()
+        return pm.logp(pm.MvStudentT.dist(nu=nu, mu=mu, chol=chol), value).sum()
 
     def draw_standardised_innovations(
         self,

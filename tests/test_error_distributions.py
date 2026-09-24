@@ -79,7 +79,6 @@ class TestConfiguration:
         assert isinstance(Gaussian(), ErrorDistribution)
         assert isinstance(StudentT(), ErrorDistribution)
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution protocol does not declare logp yet")
     def test_protocol_requires_logp(self):
         """A hand-rolled adapter missing `logp` must fail the runtime check.
 
@@ -232,7 +231,6 @@ class TestLogp:
       endogenous block.
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
     def test_gaussian_logp_matches_pm_logp(self):
         import pymc as pm
 
@@ -247,7 +245,6 @@ class TestLogp:
             expected = pm.logp(pm.MvNormal.dist(mu=mu, chol=chol), value).sum().eval()
         np.testing.assert_allclose(actual, expected)
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
     def test_gaussian_logp_is_a_scalar(self):
         import pymc as pm
 
@@ -261,7 +258,6 @@ class TestLogp:
             result = Gaussian().logp(mu, chol, value)
         assert result.eval().shape == ()
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
     def test_gaussian_model_parity_with_build_likelihood(self):
         """A `build_likelihood` model and a `pm.Potential(logp)` model agree."""
         import pymc as pm
@@ -279,7 +275,6 @@ class TestLogp:
 
         assert built.compile_logp()({}) == pytest.approx(via_potential.compile_logp()({}))
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
     def test_student_t_fixed_nu_logp_matches_pm_logp(self):
         import pymc as pm
 
@@ -295,7 +290,6 @@ class TestLogp:
             expected = pm.logp(pm.MvStudentT.dist(nu=nu, mu=mu, chol=chol), value).sum().eval()
         np.testing.assert_allclose(actual, expected)
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
     def test_student_t_fixed_nu_model_parity(self):
         import pymc as pm
 
@@ -313,7 +307,6 @@ class TestLogp:
 
         assert built.compile_logp()({}) == pytest.approx(via_potential.compile_logp()({}))
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
     def test_student_t_inferred_nu_model_parity(self):
         """Inferred nu: `logp` must register the same `nu_excess`/`nu` names.
 
@@ -341,7 +334,6 @@ class TestLogp:
         point = {"nu_excess_log__": np.array(0.5)}
         assert built.compile_logp()(point) == pytest.approx(via_potential.compile_logp()(point))
 
-    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
     def test_student_t_logp_honours_adr_0007_scale_matrix_convention(self):
         """`chol` is the scale-matrix factor, not the covariance factor.
 
