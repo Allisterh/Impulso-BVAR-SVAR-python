@@ -111,6 +111,27 @@ def _sequential_logml(Y, X, Yd, Xd) -> float:
     return float(total)
 
 
+# ------------------------------------------------------------- ar1_residual_sd pinning
+
+
+class TestAr1ResidualSd:
+    """Pins `ar1_residual_sd` on a tiny fixed series (issue 03)."""
+
+    def test_pins_known_small_series(self):
+        """Two-column series, hand-solved AR(1)-with-constant OLS per column.
+
+        Column 0 = [1, 2, 4, 3]: regressing `y[1:]` on a constant and `y[:-1]` gives
+        `beta = (5/2, 3/14)`, residuals `(-5/7, 15/14, -5/14)`, sum of squares `25/14`,
+        and 1 residual degree of freedom (`T - 1 - 2 = 1`), so `sd = 5/sqrt(14)`.
+
+        Column 1 = [10, 8, 9, 7]: `beta = (12.5, -0.5)`, residuals `(0.5, 0.5, -1.0)`,
+        sum of squares `1.5`, same 1 degree of freedom, so `sd = sqrt(1.5)`.
+        """
+        y = np.array([[1.0, 10.0], [2.0, 8.0], [4.0, 9.0], [3.0, 7.0]])
+        expected = np.array([5.0 / np.sqrt(14.0), np.sqrt(1.5)])
+        np.testing.assert_allclose(ar1_residual_sd(y), expected, rtol=1e-12)
+
+
 # --------------------------------------------------------------- gate 1: posterior mean
 
 
