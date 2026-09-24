@@ -187,7 +187,6 @@ class TestMinnesotaPriorRejectsDegenerateSigma:
     on its lag to inf, with the own-lag entry itself becoming 0.0 / 0.0 = nan.
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: build_priors does not yet validate sigma")
     @pytest.mark.parametrize("bad_value", [0.0, -1.0, np.nan, np.inf, -np.inf])
     def test_rejects_non_positive_or_non_finite_entry(self, bad_value):
         prior = MinnesotaPrior()
@@ -195,7 +194,6 @@ class TestMinnesotaPriorRejectsDegenerateSigma:
         with pytest.raises(ValueError, match="finite and strictly positive"):
             prior.build_priors(n_vars=3, n_lags=2, sigma=sigma)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: build_priors does not yet validate sigma")
     def test_error_names_the_offending_index(self):
         prior = MinnesotaPrior()
         with pytest.raises(ValueError, match=r"sigma\[1\]"):

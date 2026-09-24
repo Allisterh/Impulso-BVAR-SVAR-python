@@ -545,7 +545,6 @@ class TestValidateSigmaIsUsable:
     `Prior.build_priors` or `_exog_prior_sigma` (issue 07b).
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: _validate_sigma_is_usable does not exist yet")
     def test_rejects_zero_entry_and_names_the_column(self):
         from impulso.spec import _validate_sigma_is_usable  # ty: ignore[unresolved-import]
 
@@ -553,7 +552,6 @@ class TestValidateSigmaIsUsable:
         with pytest.raises(ValueError, match=r"'y2'"):
             _validate_sigma_is_usable(sigma, ["y1", "y2", "y3"])
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: _validate_sigma_is_usable does not exist yet")
     @pytest.mark.parametrize("bad_value", [0.0, -1.0, np.nan, np.inf])
     def test_rejects_non_positive_or_non_finite(self, bad_value):
         from impulso.spec import _validate_sigma_is_usable  # ty: ignore[unresolved-import]
@@ -562,7 +560,6 @@ class TestValidateSigmaIsUsable:
         with pytest.raises(ValueError, match="zero, negative, or non-finite"):
             _validate_sigma_is_usable(sigma, ["y1", "y2"])
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: _validate_sigma_is_usable does not exist yet")
     def test_accepts_all_positive_finite(self):
         from impulso.spec import _validate_sigma_is_usable  # ty: ignore[unresolved-import]
 
@@ -577,7 +574,6 @@ class TestBuildPymcModelRejectsDegenerateSigma:
     because it does vary.
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: sigma is not yet validated in _build_pymc_model")
     def test_rejects_a_column_with_exactly_zero_ar1_residual_sd(self, rng, monkeypatch):
         """A column need not be literally constant to trigger this guard: any
         column `ar1_residual_sd` happens to report a zero (or non-finite) scale

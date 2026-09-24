@@ -52,4 +52,8 @@ data = VARData(
 - Every `exog` column must vary within the sample — a constant column is collinear
   with the intercept the VAR already includes, so its coefficient is not identified.
   Drop it, or encode a level shift as a dummy that changes value inside the sample.
+- Every `endog` column must vary within the sample too — a constant series has no
+  residual variance for any VAR estimator to fit, and breaks the Minnesota prior's
+  cross-lag scaling (see [ADR-0015](../adr/0015-minnesota-cross-lags-scale-with-data.md)).
+  Drop it, or model it as `exog` if it belongs in the equations only as a regressor.
 - Arrays are copied and made read-only — the original data is never modified

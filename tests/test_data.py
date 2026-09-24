@@ -54,8 +54,11 @@ class TestVARDataConstruction:
 
 class TestVARDataValidation:
     @pytest.mark.parametrize("bad_val", [np.nan, np.inf, -np.inf])
-    def test_rejects_nonfinite(self, sample_index, endog_names, bad_val):
-        bad = np.full((100, 3), 1.0)
+    def test_rejects_nonfinite(self, sample_index, endog_names, bad_val, rng):
+        # Varying, not `np.full`: a constant column would now be caught by the
+        # endog-variation check (issue 07b) before this test's NaN/Inf column
+        # ever gets a chance to fire the message under test.
+        bad = rng.standard_normal((100, 3))
         bad[0, 2] = bad_val
         with pytest.raises(ValueError, match="NaN or Inf"):
             VARData(endog=bad, endog_names=endog_names, index=sample_index)
@@ -177,14 +180,12 @@ class TestVARDataEndogVariation:
     each column's AR(1) residual sd, sigma_i/sigma_j (docs/adr/0015, issue 07b).
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: constant endog columns not yet rejected")
     @pytest.mark.parametrize("fill", [1.0, 0.0, -3.5])
     def test_rejects_constant_endog_column(self, sample_index, fill):
         endog = np.column_stack([np.full(100, fill), np.arange(100, dtype=float)])
         with pytest.raises(ValueError, match=r"constant columns: 'level'"):
             VARData(endog=endog, endog_names=["level", "trend"], index=sample_index)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: constant endog columns not yet rejected")
     def test_error_names_every_constant_column_and_points_at_the_fix(self, sample_index, rng):
         endog = np.column_stack([np.ones(100), rng.standard_normal(100), np.zeros(100)])
         with pytest.raises(ValueError, match=r"constant columns: 'ones', 'zeros'") as exc:
@@ -211,7 +212,6 @@ class TestVARDataEndogVariation:
         with pytest.raises(ValueError, match="NaN or Inf"):
             VARData(endog=bad, endog_names=["broken", "y"], index=sample_index)
 
-    @pytest.mark.xfail(strict=True, reason="issue 07b: constant endog columns not yet rejected")
     def test_from_df_rejects_constant_endog_column(self, rng):
         index = pd.date_range("2000-01-01", periods=100, freq="QS")
         df = pd.DataFrame(rng.standard_normal((100, 3)), columns=["gdp", "inflation", "rate"], index=index)

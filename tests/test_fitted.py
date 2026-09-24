@@ -518,7 +518,12 @@ class TestInnovationCovariance:
             "nu": (("chain", "draw"), nu),
         })
         data = VARData(
-            endog=np.zeros((T + 1, n_vars)),
+            # Placeholder: only the shape feeds `fitted.sigma()` below, which is
+            # computed from the hand-rigged posterior (`h`, `R_chol`, `nu`), not
+            # from `data.endog`. Must vary per column now that VARData rejects
+            # constant endog columns (issue 07b); an all-zero placeholder no
+            # longer qualifies.
+            endog=np.arange((T + 1) * n_vars, dtype=float).reshape(T + 1, n_vars),
             endog_names=["y1", "y2"],
             index=pd.date_range("2000-01-01", periods=T + 1, freq="MS"),
         )
