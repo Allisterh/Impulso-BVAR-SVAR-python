@@ -24,6 +24,7 @@ from impulso.observation import Gaussian, StudentT
 from impulso.priors import NIWPrior
 from impulso.samplers import NUTSSampler
 from impulso.spec import VAR
+from impulso.sv.spec import StochasticVolatility
 from impulso.volatility import Constant
 
 pytestmark = pytest.mark.xfail(strict=True, reason="issue 04a: FittedVAR.from_posterior does not exist yet")
@@ -57,6 +58,52 @@ def _cholesky(rng, n_chains, n_vars, n_draws, dim_names=("var1", "var2")):
     return xr.DataArray(L, dims=["chain", "draw", *dim_names])
 
 
+def _log_volatility(rng, n_chains, n_vars, n_draws, t, dim_names=("time", "var")):
+    """`h`, the per-variable log-volatility path `StochasticVolatility.cholesky_at` reads.
+
+    Dim *names* are arbitrary (the validator checks shape only — see
+    `_posterior_validation`'s module docstring for why); trailing shape is
+    `(t, n_vars)`, matching how `build_pymc_latent` builds it before
+    chain/draw are prepended.
+    """
+    values = rng.standard_normal((n_chains, n_draws, t, n_vars)) * 0.1
+    return xr.DataArray(values, dims=["chain", "draw", *dim_names])
+
+
+def _mixing_cholesky(rng, n_chains, n_vars, n_draws, dim_names=("var1", "var2")):
+    """`R_chol`, the unit-diagonal mixing factor `StochasticVolatility.cholesky_at` reads."""
+    values = np.zeros((n_chains, n_draws, n_vars, n_vars))
+    for c in range(n_chains):
+        for d in range(n_draws):
+            offdiag = rng.standard_normal((n_vars, n_vars)) * 0.1
+            values[c, d] = np.eye(n_vars) + np.tril(offdiag, k=-1)
+    return xr.DataArray(values, dims=["chain", "draw", *dim_names])
+
+
+def _add_volatility_variables(variables, rng, n_chains, n_vars, n_draws, *, sv, sv_time, omit):
+    """Add either `h`/`R_chol` (`sv=True`) or `L` (`sv=False`) — mutually exclusive."""
+    if sv:
+        if "h" not in omit:
+            variables["h"] = _log_volatility(rng, n_chains, n_vars, n_draws, sv_time)
+        if "R_chol" not in omit:
+            variables["R_chol"] = _mixing_cholesky(rng, n_chains, n_vars, n_draws)
+    elif "L" not in omit:
+        variables["L"] = _cholesky(rng, n_chains, n_vars, n_draws)
+
+
+def _add_exog_variable(variables, rng, n_chains, n_vars, n_draws, endog_names, *, n_exog, exog_names, exog_labels):
+    """Add `B_exog` when `n_exog` is given."""
+    if n_exog is None:
+        return
+    values = rng.standard_normal((n_chains, n_draws, n_vars, n_exog))
+    coords = {}
+    if exog_labels:
+        coords["var"] = endog_names
+        if exog_names is not None:
+            coords["exog"] = list(exog_names)
+    variables["B_exog"] = xr.DataArray(values, dims=["chain", "draw", "var", "exog"], coords=coords or None)
+
+
 def _build_posterior(
     *,
     n_chains=2,
@@ -72,6 +119,8 @@ def _build_posterior(
     exog_names=None,
     exog_labels=False,
     nu=None,
+    sv=False,
+    sv_time=40,
     omit=(),
     extra=None,
     seed=0,
@@ -85,6 +134,13 @@ def _build_posterior(
     label-mismatch rejection path. `omit` drops named variables entirely;
     `extra` overrides or adds raw `xr.DataArray`s after the defaults are
     built, for constructing malformed shapes.
+
+    `sv=True` builds an `h` / `R_chol` pair (the `StochasticVolatility`
+    contract) instead of `L` (the `Constant` / `ConjugateVolatility`
+    contract) — the two are mutually exclusive, matching how a real fit
+    only ever produces one or the other. `sv_time` sets `h`'s in-sample
+    time-axis length; callers pass `data.endog.shape[0] - n_lags` to match
+    a real `VARData`.
     """
     rng = np.random.default_rng(seed)
     endog_names = list(endog_names)
@@ -98,16 +154,19 @@ def _build_posterior(
         variables["intercept"] = _intercept(
             rng, n_chains, n_vars, n_draws, endog_names, labels=var_labels, bad_labels=bad_var_labels
         )
-    if "L" not in omit:
-        variables["L"] = _cholesky(rng, n_chains, n_vars, n_draws)
-    if n_exog is not None and "B_exog" not in omit:
-        values = rng.standard_normal((n_chains, n_draws, n_vars, n_exog))
-        coords = {}
-        if exog_labels:
-            coords["var"] = endog_names
-            if exog_names is not None:
-                coords["exog"] = list(exog_names)
-        variables["B_exog"] = xr.DataArray(values, dims=["chain", "draw", "var", "exog"], coords=coords or None)
+    _add_volatility_variables(variables, rng, n_chains, n_vars, n_draws, sv=sv, sv_time=sv_time, omit=omit)
+    if "B_exog" not in omit:
+        _add_exog_variable(
+            variables,
+            rng,
+            n_chains,
+            n_vars,
+            n_draws,
+            endog_names,
+            n_exog=n_exog,
+            exog_names=exog_names,
+            exog_labels=exog_labels,
+        )
     if nu is not None:
         variables["nu"] = xr.DataArray(np.full((n_chains, n_draws), nu), dims=["chain", "draw"])
 
@@ -252,9 +311,10 @@ class TestFromPosteriorRejectsWrongColumnCounts:
             FittedVAR.from_posterior(idata, var_data, n_lags=1)
 
     def test_rejects_b_var_count_not_matching_n_vars(self, var_data):
-        rng = np.random.default_rng(0)
-        bad_b = xr.DataArray(rng.standard_normal((2, 5, 3, 2)), dims=["chain", "draw", "var", "coeff"])
-        idata = _build_posterior(extra={"B": bad_b})
+        # "var" is a shared dimension across B/intercept/L, so every variable
+        # in this posterior is built at n_vars=3 (internally consistent);
+        # `var_data` (n_vars=2) is what disagrees with it.
+        idata = _build_posterior(n_vars=3, endog_names=("y1", "y2", "y3"))
         with pytest.raises(ValueError, match="'B' dim 'var' has size 3, expected 2"):
             FittedVAR.from_posterior(idata, var_data, n_lags=1)
 
@@ -282,9 +342,74 @@ class TestFromPosteriorRejectsBadLabels:
             FittedVAR.from_posterior(idata, var_data, n_lags=1)
 
     def test_rejects_var_labels_disagreeing_with_endog_names(self, var_data):
+        # "var" is a Dataset-wide coordinate shared by every var-dim variable
+        # (intercept is the only one that declares it here), so the mismatch
+        # surfaces on 'B' — the first var-dim variable `from_posterior` checks.
         idata = _build_posterior(var_labels=True, bad_var_labels=True)
-        with pytest.raises(ValueError, match="'intercept' 'var' labels"):
+        with pytest.raises(ValueError, match="'B' 'var' labels"):
             FittedVAR.from_posterior(idata, var_data, n_lags=1)
+
+    def test_rejects_var_major_coeff_labels_at_n_lags_2(self, var_data):
+        """Lag-major is `L1.y1, L1.y2, L2.y1, L2.y2`; var-major (all of y1's lags,
+        then all of y2's) is a plausible mistake and must be rejected too."""
+        n_lags = 2
+        rng = np.random.default_rng(0)
+        var_major_b = xr.DataArray(
+            rng.standard_normal((2, 5, 2, 4)) * 0.2,
+            dims=["chain", "draw", "var", "coeff"],
+            coords={"coeff": ["L1.y1", "L2.y1", "L1.y2", "L2.y2"], "var": ["y1", "y2"]},
+        )
+        idata = _build_posterior(n_lags=n_lags, extra={"B": var_major_b})
+        with pytest.raises(ValueError, match="'B' 'coeff' labels"):
+            FittedVAR.from_posterior(idata, var_data, n_lags=n_lags)
+
+
+# --------------- Volatility-adapter dispatch: Constant vs StochasticVolatility ---------------
+
+
+class _UnknownVolatilityAdapter:
+    """Stands in for a volatility adapter `_posterior_validation` doesn't recognise.
+
+    Deliberately not a `Constant`, `ConjugateVolatility`, or `StochasticVolatility`
+    subclass (and not registered with any of them), so it exercises the
+    "unrecognised adapter" branch of `_validate_volatility` rather than
+    accidentally satisfying one of the known ones structurally.
+    """
+
+
+class TestFromPosteriorVolatilityDispatch:
+    def test_accepts_sv_shaped_posterior(self, var_data):
+        n_lags = 1
+        expected_t = var_data.endog.shape[0] - n_lags
+        idata = _build_posterior(sv=True, sv_time=expected_t, n_lags=n_lags)
+        fitted = FittedVAR.from_posterior(idata, var_data, n_lags=n_lags, volatility=StochasticVolatility())
+        assert isinstance(fitted.volatility, StochasticVolatility)
+
+    def test_rejects_missing_h_under_sv(self, var_data):
+        n_lags = 1
+        expected_t = var_data.endog.shape[0] - n_lags
+        idata = _build_posterior(sv=True, sv_time=expected_t, n_lags=n_lags, omit=("h",))
+        with pytest.raises(ValueError, match="missing required variable 'h'"):
+            FittedVAR.from_posterior(idata, var_data, n_lags=n_lags, volatility=StochasticVolatility())
+
+    def test_rejects_missing_r_chol_under_sv(self, var_data):
+        n_lags = 1
+        expected_t = var_data.endog.shape[0] - n_lags
+        idata = _build_posterior(sv=True, sv_time=expected_t, n_lags=n_lags, omit=("R_chol",))
+        with pytest.raises(ValueError, match="missing required variable 'R_chol'"):
+            FittedVAR.from_posterior(idata, var_data, n_lags=n_lags, volatility=StochasticVolatility())
+
+    def test_rejects_h_with_wrong_time_length(self, var_data):
+        n_lags = 1
+        expected_t = var_data.endog.shape[0] - n_lags
+        idata = _build_posterior(sv=True, sv_time=expected_t + 5, n_lags=n_lags)
+        with pytest.raises(ValueError, match=rf"'h' has trailing shape \[{expected_t + 5}, 2\]"):
+            FittedVAR.from_posterior(idata, var_data, n_lags=n_lags, volatility=StochasticVolatility())
+
+    def test_rejects_unrecognised_volatility_adapter(self, var_data):
+        idata = _build_posterior()
+        with pytest.raises(TypeError, match="unrecognised volatility adapter '_UnknownVolatilityAdapter'"):
+            FittedVAR.from_posterior(idata, var_data, n_lags=1, volatility=_UnknownVolatilityAdapter())
 
 
 # --------------- Acceptance: exog and Student-t ---------------
@@ -357,4 +482,16 @@ class TestFromPosteriorAcceptsEstimatorPosteriors:
 
         assert isinstance(rewrapped, FittedVAR)
         assert rewrapped.has_exog is True
+        np.testing.assert_array_equal(rewrapped.coefficients, original.coefficients)
+
+    @pytest.mark.slow
+    def test_accepts_var_fit_posterior_with_stochastic_volatility(self, var_data):
+        spec = VAR(lags=1, prior="minnesota", volatility="sv")
+        sampler = NUTSSampler(draws=10, tune=10, chains=1, cores=1, random_seed=0)
+        original = spec.fit(var_data, sampler=sampler)
+
+        rewrapped = FittedVAR.from_posterior(original.idata, var_data, original.n_lags, volatility=original.volatility)
+
+        assert isinstance(rewrapped, FittedVAR)
+        assert isinstance(rewrapped.volatility, StochasticVolatility)
         np.testing.assert_array_equal(rewrapped.coefficients, original.coefficients)
