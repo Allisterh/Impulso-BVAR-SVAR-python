@@ -13,6 +13,7 @@ matplotlib.use("Agg")
 
 from impulso import VAR, VARData
 from impulso._arviz_compat import ARVIZ_V1
+from impulso._conjugate import ar1_residual_sd
 from impulso._lag_selection import select_lag_order
 from impulso._residuals import fitted_values, reduced_form_residuals
 from impulso.fitted import FittedVAR
@@ -177,6 +178,7 @@ class TestPriorPredictive:
         assert "B_exog" in idata.prior
         assert idata.prior["B_exog"].shape == (1, 10, 2, 1)
 
+    @pytest.mark.xfail(strict=True, reason="issue 07a: _exog_prior_sigma takes sigma, not endog, yet")
     def test_b_exog_draws_use_the_scale_adaptive_prior(self, var_data_2v_exog):
         """The simulated `B_exog` spreads at `_exog_prior_sigma`, not at 1 (#192).
 
@@ -188,7 +190,7 @@ class TestPriorPredictive:
         idata = VAR(lags=1).prior_predictive(var_data_2v_exog, draws=4000, random_seed=0)
 
         expected = _exog_prior_sigma(
-            var_data_2v_exog.endog,
+            ar1_residual_sd(var_data_2v_exog.endog),
             var_data_2v_exog.exog[1:],
             100.0,
         )
