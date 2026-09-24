@@ -27,9 +27,6 @@ from impulso.spec import VAR
 from impulso.sv.spec import StochasticVolatility
 from impulso.volatility import Constant
 
-pytestmark = pytest.mark.xfail(strict=True, reason="issue 04a: FittedVAR.from_posterior does not exist yet")
-
-
 # --------------- Posterior builder ---------------
 
 
