@@ -307,7 +307,6 @@ class TestConstantDefaultLogpUnchanged:
 class TestInnovationScalePrior:
     """Standalone `InnovationScalePrior` spec: family, scale, validation, round-trip."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
     @pytest.mark.parametrize("family", ["halfnormal", "exponential", "halfcauchy"])
     def test_construction_each_family(self, family):
         from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
@@ -316,7 +315,6 @@ class TestInnovationScalePrior:
         assert prior.family == family
         assert prior.scale == 1.0
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
     @pytest.mark.parametrize("bad_scale", [0.0, -1.0, -0.01])
     def test_non_positive_scale_raises(self, bad_scale):
         from pydantic import ValidationError
@@ -326,7 +324,6 @@ class TestInnovationScalePrior:
         with pytest.raises(ValidationError):
             InnovationScalePrior(family="halfnormal", scale=bad_scale)
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
     def test_unknown_family_raises(self):
         from pydantic import ValidationError
 
@@ -335,7 +332,6 @@ class TestInnovationScalePrior:
         with pytest.raises(ValidationError):
             InnovationScalePrior(family="lognormal", scale=1.0)
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
     def test_is_frozen(self):
         from pydantic import ValidationError
 
@@ -345,7 +341,6 @@ class TestInnovationScalePrior:
         with pytest.raises(ValidationError):
             prior.scale = 2.0
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
     def test_model_dump_round_trip(self):
         from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
@@ -356,11 +351,9 @@ class TestInnovationScalePrior:
 class TestConstantInnovationScalePriorsField:
     """`Constant.innovation_scale_priors`: default, construction, round-trip."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_default_is_none(self):
         assert Constant().innovation_scale_priors is None
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_accepts_tuple_of_innovation_scale_priors(self):
         from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
@@ -371,7 +364,6 @@ class TestConstantInnovationScalePriorsField:
         adapter = Constant(innovation_scale_priors=priors)  # ty: ignore[pydantic-discarded-extra-argument]
         assert adapter.innovation_scale_priors == priors
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_round_trips_with_other_fields(self):
         from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
@@ -387,14 +379,12 @@ class TestConstantInnovationScalePriorsField:
         assert restored == adapter
         assert restored.innovation_scale_priors == priors
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_round_trip_when_omitted(self):
         adapter = Constant()
         restored = Constant.model_validate(adapter.model_dump())
         assert restored == adapter
         assert restored.innovation_scale_priors is None
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_nested_validation_rejects_bad_scale_on_model_validate(self):
         from pydantic import ValidationError
 
@@ -406,7 +396,6 @@ class TestConstantInnovationScalePriorsBuild:
     """`build_pymc_latent` with `innovation_scale_priors` set: mismatched
     lengths, mixed families, and the marginal prior each family produces."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_mismatched_length_raises_at_build_time_not_construction(self):
         import pymc as pm
 
@@ -419,7 +408,6 @@ class TestConstantInnovationScalePriorsBuild:
         with pytest.raises(ValueError, match="innovation_scale_priors"), pm.Model():
             adapter.build_pymc_latent(n_vars=3, T=10)
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_mixed_families_register_one_named_rv_per_variable(self):
         import pymc as pm
 
@@ -442,7 +430,6 @@ class TestConstantInnovationScalePriorsBuild:
         assert L_value.shape == (3, 3)
         np.testing.assert_allclose(np.triu(L_value, k=1), 0.0)
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_n_vars_1_skips_tril_offdiag(self):
         import pymc as pm
 
@@ -458,7 +445,6 @@ class TestConstantInnovationScalePriorsBuild:
         assert "sigma_sd_0" in var_names
         assert "tril_offdiag" not in var_names
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_n_vars_2_diagonal_uses_declared_scales(self):
         """Off-diagonal construction (`tril_offdiag` scaled by `sd[i]`) is unchanged."""
         import pymc as pm
@@ -479,7 +465,6 @@ class TestConstantInnovationScalePriorsBuild:
         assert L_value[1, 0] != 0.0  # off-diagonal placed in the lower-triangular cell
         np.testing.assert_array_equal(np.diag(L_value), np.array([sd0, sd1]))
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     @pytest.mark.parametrize(
         ("family", "scale", "point"),
         [
@@ -516,7 +501,6 @@ class TestConstantInnovationScalePriorsBuild:
         logp = pm.logp(model["sigma_sd_0"], point).eval()
         assert float(logp) == pytest.approx(reference.logpdf(point), rel=1e-6)
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_mixed_families_each_diagonal_entry_uses_its_own_declared_family(self):
         """Same check as above, but with three different families in one model
         (mixed families across variables must work)."""

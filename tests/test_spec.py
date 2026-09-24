@@ -176,7 +176,6 @@ class TestPyMCModelBuild:
 class TestVarFitWithInnovationScalePriors:
     """Issue 06: `Constant.innovation_scale_priors` wired through `VAR.fit`."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_mismatched_length_raises_before_sampling(self, var_data_2v):
         """A length mismatch must surface as a `ValueError` from model building,
         before the sampler is ever invoked (`_build_pymc_model` runs first in
@@ -191,7 +190,6 @@ class TestVarFitWithInnovationScalePriors:
         with pytest.raises(ValueError, match="innovation_scale_priors"):
             spec.fit(var_data_2v)
 
-    @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_matched_length_registers_per_variable_rvs(self, var_data_2v):
         """A correctly-sized `innovation_scale_priors` builds cleanly through
         the real `VAR.fit` pipeline (intercepted before sampling)."""
