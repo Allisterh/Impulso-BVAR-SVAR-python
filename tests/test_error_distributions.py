@@ -79,6 +79,25 @@ class TestConfiguration:
         assert isinstance(Gaussian(), ErrorDistribution)
         assert isinstance(StudentT(), ErrorDistribution)
 
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution protocol does not declare logp yet")
+    def test_protocol_requires_logp(self):
+        """A hand-rolled adapter missing `logp` must fail the runtime check.
+
+        `runtime_checkable` Protocol `isinstance` checks only presence of
+        named members, so this is exactly how "the protocol declares logp"
+        is observable from outside the seam.
+        """
+
+        class _NoLogpAdapter:
+            name = "custom"
+            is_heavy_tailed = False
+
+            def build_likelihood(self, name, mu, chol, observed, dims=None): ...
+            def draw_standardised_innovations(self, shape, rng, posterior): ...
+            def variance_inflation(self, posterior): ...
+
+        assert not isinstance(_NoLogpAdapter(), ErrorDistribution)
+
 
 class TestGaussianInnovations:
     def test_stream_is_bit_identical_to_plain_standard_normal(self):
@@ -194,3 +213,152 @@ class TestVarianceInflation:
     def test_inflation_missing_nu_raises(self):
         with pytest.raises(ValueError, match="no 'nu' variable"):
             StudentT(nu=5.0).variance_inflation(xr.Dataset())
+
+
+class TestLogp:
+    """`logp(mu, chol, value)` must equal `pm.logp` of the distribution
+    `build_likelihood` registers, summed over time.
+
+    Two complementary checks per adapter:
+
+    - **Direct parity**: `adapter.logp(mu, chol, value)` equals
+      `pm.logp(dist, value).sum()` built by hand from the same PyMC
+      distribution.
+    - **Model parity**: a model built via `build_likelihood(observed=Y)`
+      and a model built via `pm.Potential("x", adapter.logp(mu, chol, Y))`
+      have identical total model logp at the same point. This is the
+      load-bearing property a later issue relies on to add the VAR
+      likelihood as a `Potential` over a latent (rather than observed)
+      endogenous block.
+    """
+
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
+    def test_gaussian_logp_matches_pm_logp(self):
+        import pymc as pm
+
+        rng = np.random.default_rng(0)
+        T, n = 5, 2
+        mu = rng.standard_normal((T, n))
+        chol = np.array([[1.2, 0.0], [0.3, 0.8]])
+        value = rng.standard_normal((T, n))
+
+        with pm.Model():
+            actual = Gaussian().logp(mu, chol, value).eval()
+            expected = pm.logp(pm.MvNormal.dist(mu=mu, chol=chol), value).sum().eval()
+        np.testing.assert_allclose(actual, expected)
+
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
+    def test_gaussian_logp_is_a_scalar(self):
+        import pymc as pm
+
+        rng = np.random.default_rng(1)
+        T, n = 4, 2
+        mu = rng.standard_normal((T, n))
+        chol = np.eye(n)
+        value = rng.standard_normal((T, n))
+
+        with pm.Model():
+            result = Gaussian().logp(mu, chol, value)
+        assert result.eval().shape == ()
+
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
+    def test_gaussian_model_parity_with_build_likelihood(self):
+        """A `build_likelihood` model and a `pm.Potential(logp)` model agree."""
+        import pymc as pm
+
+        rng = np.random.default_rng(2)
+        T, n = 6, 2
+        mu = rng.standard_normal((T, n))
+        chol = np.array([[1.0, 0.0], [0.2, 0.9]])
+        Y = rng.standard_normal((T, n))
+
+        with pm.Model() as built:
+            Gaussian().build_likelihood("obs", mu=mu, chol=chol, observed=Y)
+        with pm.Model() as via_potential:
+            pm.Potential("x", Gaussian().logp(mu, chol, Y))
+
+        assert built.compile_logp()({}) == pytest.approx(via_potential.compile_logp()({}))
+
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
+    def test_student_t_fixed_nu_logp_matches_pm_logp(self):
+        import pymc as pm
+
+        rng = np.random.default_rng(3)
+        T, n = 5, 2
+        mu = rng.standard_normal((T, n))
+        chol = np.array([[1.2, 0.0], [0.3, 0.8]])
+        value = rng.standard_normal((T, n))
+        nu = 5.0
+
+        with pm.Model():
+            actual = StudentT(nu=nu).logp(mu, chol, value).eval()
+            expected = pm.logp(pm.MvStudentT.dist(nu=nu, mu=mu, chol=chol), value).sum().eval()
+        np.testing.assert_allclose(actual, expected)
+
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
+    def test_student_t_fixed_nu_model_parity(self):
+        import pymc as pm
+
+        rng = np.random.default_rng(4)
+        T, n = 6, 2
+        mu = rng.standard_normal((T, n))
+        chol = np.array([[1.0, 0.0], [0.2, 0.9]])
+        Y = rng.standard_normal((T, n))
+        adapter = StudentT(nu=6.0)
+
+        with pm.Model() as built:
+            adapter.build_likelihood("obs", mu=mu, chol=chol, observed=Y)
+        with pm.Model() as via_potential:
+            pm.Potential("x", adapter.logp(mu, chol, Y))
+
+        assert built.compile_logp()({}) == pytest.approx(via_potential.compile_logp()({}))
+
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
+    def test_student_t_inferred_nu_model_parity(self):
+        """Inferred nu: `logp` must register the same `nu_excess`/`nu` names.
+
+        Both models carry the same free random variable
+        (`nu_excess`, unconstrained via its `_log__` transform), so a
+        matching point makes the two total logps comparable.
+        """
+        import pymc as pm
+
+        rng = np.random.default_rng(5)
+        T, n = 6, 2
+        mu = rng.standard_normal((T, n))
+        chol = np.array([[1.0, 0.0], [0.2, 0.9]])
+        Y = rng.standard_normal((T, n))
+        adapter = StudentT()  # nu="infer"
+
+        with pm.Model() as built:
+            adapter.build_likelihood("obs", mu=mu, chol=chol, observed=Y)
+        with pm.Model() as via_potential:
+            pm.Potential("x", adapter.logp(mu, chol, Y))
+
+        assert {"nu_excess", "nu"} <= set(built.named_vars)
+        assert {"nu_excess", "nu"} <= set(via_potential.named_vars)
+
+        point = {"nu_excess_log__": np.array(0.5)}
+        assert built.compile_logp()(point) == pytest.approx(via_potential.compile_logp()(point))
+
+    @pytest.mark.xfail(strict=True, reason="issue 05: ErrorDistribution.logp not implemented yet")
+    def test_student_t_logp_honours_adr_0007_scale_matrix_convention(self):
+        """`chol` is the scale-matrix factor, not the covariance factor.
+
+        A direct regression check against `pm.MvStudentT` built with the
+        same `chol` confirms `logp` never rescales it — the whole point of
+        ADR-0007.
+        """
+        import pymc as pm
+
+        rng = np.random.default_rng(6)
+        T, n = 4, 3
+        mu = rng.standard_normal((T, n))
+        chol = np.array([[2.0, 0.0, 0.0], [0.5, 1.5, 0.0], [0.1, 0.3, 1.0]])
+        value = rng.standard_normal((T, n))
+        nu = 4.5
+
+        with pm.Model():
+            actual = StudentT(nu=nu).logp(mu, chol, value).eval()
+            expected = pm.logp(pm.MvStudentT.dist(nu=nu, mu=mu, chol=chol), value).sum().eval()
+        np.testing.assert_allclose(actual, expected)
