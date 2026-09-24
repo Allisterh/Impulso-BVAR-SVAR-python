@@ -1,6 +1,7 @@
 """VAR model specification."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Self
 
 import numpy as np
@@ -18,6 +19,8 @@ from impulso.sv.spec import StochasticVolatility
 from impulso.volatility import Constant
 
 if TYPE_CHECKING:
+    import pytensor.tensor as pt
+
     from impulso.fitted import FittedVAR
 
 _PRIOR_REGISTRY: dict[str, type] = {
@@ -44,8 +47,8 @@ _EXOG_SD_FLOOR_FRACTION: float = 1e-3
 def _validate_sigma_is_usable(sigma: np.ndarray, endog_names: Sequence[str]) -> None:
     """Reject a per-variable scale that would break every prior dividing by it (issue 07b).
 
-    `sigma` (`ar1_residual_sd(data.endog)`) is computed once in `_build_pymc_model`
-    and shared by `Prior.build_priors` — whose Minnesota cross-lag entries scale by
+    `sigma` (`ar1_residual_sd(endog)`, or the caller's `endog_scales`) is resolved
+    once in `VAR.build_in_model` and shared by `Prior.build_priors` — whose Minnesota cross-lag entries scale by
     `sigma[i] / sigma[j]` (docs/adr/0015) — and by `_exog_prior_sigma` below. A zero
     entry collapses that column's own row of the coefficient prior toward zero,
     sends every other row's coefficient on its lag to `inf`, and turns the own-lag
@@ -111,10 +114,10 @@ def _exog_prior_sigma(
 
     Args:
         sigma: Per-endogenous-variable AR(1) residual standard deviation,
-            shape `(n_vars,)` — `ar1_residual_sd(data.endog)`. `_build_pymc_model`
-            computes this once and passes the same array here and to
-            `Prior.build_priors`, so the coefficient and exogenous priors are
-            expressed in the same units.
+            shape `(n_vars,)` — `ar1_residual_sd(endog)`, or the caller's
+            `endog_scales`. `VAR.build_in_model` resolves this once and passes
+            the same array here and to `Prior.build_priors`, so the
+            coefficient and exogenous priors are expressed in the same units.
         x_exog: Exogenous regressor block of shape `(T_eff, n_exog)`, already
             trimmed to the rows the likelihood sees.
         scale: Multiplier in units of "residual standard deviations of the
@@ -149,6 +152,34 @@ def _exog_prior_sigma(
     peak = np.abs(x_exog).max(axis=0)
     s_eff = np.maximum(s, _EXOG_SD_FLOOR_FRACTION * peak)
     return scale * np.outer(sigma, 1.0 / s_eff)
+
+
+@dataclass(frozen=True)
+class VARModelHandles:
+    """PyMC variables `VAR.build_in_model` registers into the active model.
+
+    Handed back so a caller embedding a VAR inside a larger PyMC model (or
+    inspecting the graph `fit`/`prior_predictive` build) can reach the
+    pieces directly, without re-deriving PyMC's own name-mangling inside a
+    nested `pm.Model(name=...)`.
+
+    Attributes:
+        intercept: Per-equation intercept, `dims=("var",)`.
+        B: VAR lag coefficients, `dims=("var", "coeff")`.
+        B_exog: Exogenous coefficients, `dims=("var", "exog")`, or `None`
+            when no exogenous block was registered.
+        L: Lower-triangular Cholesky factor of the structural-shock scale
+            matrix — `(n_vars, n_vars)` for constant volatility, `(T,
+            n_vars, n_vars)` for stochastic volatility.
+        obs: The registered observation likelihood — `error_dist
+            .build_likelihood`'s return value.
+    """
+
+    intercept: "pt.TensorVariable"
+    B: "pt.TensorVariable"
+    B_exog: "pt.TensorVariable | None"
+    L: "pt.TensorVariable"
+    obs: "pt.TensorVariable"
 
 
 class VAR(ImpulsoBaseModel):
@@ -326,62 +357,107 @@ class VAR(ImpulsoBaseModel):
         with model:
             return pm.sample_prior_predictive(draws=draws, random_seed=random_seed)
 
-    def _build_pymc_model(self, data: VARData) -> tuple[Any, int]:
-        """Build the PyMC model graph for this specification.
+    def build_in_model(
+        self,
+        endog: np.ndarray,
+        exog: np.ndarray | None,
+        n_lags: int,
+        endog_names: Sequence[str],
+        exog_names: Sequence[str] | None = None,
+        endog_scales: np.ndarray | None = None,
+    ) -> VARModelHandles:
+        """Register this VAR specification into the active PyMC model.
 
-        Resolves the lag order (running `select_lag_order` when `lags` is a
-        criterion string), assembles the design matrices, and registers the
-        intercept, coefficient, exogenous, volatility and likelihood nodes.
-        The design matrices are baked into the graph as constants, so the
-        returned model is tied to `data`.
+        The public counterpart of `_build_pymc_model`: where that wrapper
+        opens a fresh model and converts a `VARData` into arrays, this
+        method takes the arrays directly and registers the intercept, lag
+        coefficients, (optional) exogenous coefficients, volatility latents
+        and observation likelihood into whichever `pymc.Model` is active on
+        entry (`pymc.modelcontext(None)`). `_build_pymc_model` routes
+        through this method too, so `fit` and `prior_predictive` share the
+        same code path with a caller embedding a VAR inside a larger PyMC
+        model — a marketing-mix model with a VAR-shaped baseline, say.
 
-        Shared by `fit` (which samples the graph) and `prior_predictive`
-        (which draws from it without conditioning on the observations). Every
-        prior lives here, including the scale-adaptive `B_exog` prior
-        (`_exog_prior_sigma`), so a prior-predictive check cannot describe a
-        different model from the one `fit` estimates.
+        `endog` is a plain numpy array here: a symbolic/latent endogenous
+        block is a later extension of this method, not something it
+        supports yet. Callers resolve string lag-selection criteria (e.g.
+        via `select_lag_order`) before calling this method — it always
+        takes a concrete integer `n_lags`.
+
+        Nesting: open a `pm.Model(name=prefix)` before calling this method
+        and every free random variable, `Deterministic` and the likelihood
+        it registers come out named `prefix::...` — ordinary PyMC nested-
+        model behaviour (see the "Nested `pm.Model(name=prefix)`" section
+        of `prototype/REPORT.md`). Coordinates are the one exception: PyMC
+        does not prefix coords, so `add_coords` below always lands on the
+        *root* model, shared by every nested submodel. Embed at most one
+        VAR's variable labelling per model — two VARs with different
+        `endog_names`/`exog_names` embedded in the same model will collide
+        on `var`/`coeff`/`exog` (identical labels are shared silently;
+        different labels raise `ValueError`).
+
+        Time coordinate: the likelihood is registered with `dims=("time",
+        "var")`, and PyMC requires an *observed* multivariate RV's named
+        dims to already be coordinates on the model — unlike a free RV, it
+        will not silently auto-register them. If the active model does not
+        already carry a `"time"` coordinate, this method adds a plain
+        positional one (`range(T_eff)`). `_build_pymc_model` pre-registers
+        `"time"` from `data.index` before calling this method, so `fit` and
+        `prior_predictive` keep real dates; a caller invoking this method
+        directly gets the positional fallback unless it registers `"time"`
+        itself first.
 
         Args:
-            data: VARData instance.
+            endog: Endogenous data, shape `(T, n_vars)`.
+            exog: Optional exogenous regressors, shape `(T, n_exog)`. `None`
+                if the model has no exogenous block.
+            n_lags: Lag order. Always a concrete integer — resolving a
+                string selection criterion is the caller's job.
+            endog_names: Names for each endogenous column, length
+                `n_vars`. Labels the `var`/`var1`/`var2`/`coeff` coordinates.
+            exog_names: Names for each exogenous column, length `n_exog`.
+                Required when `exog` is given; labels the `exog` coordinate.
+            endog_scales: Per-variable scale `sigma`, shape `(n_vars,)`.
+                `None` (the default) computes it from `endog` with
+                `ar1_residual_sd`. The same array feeds both the prior's
+                Minnesota cross-lag scaling `sigma_i / sigma_j`
+                (`Prior.build_priors`, docs/adr/0015) and the exogenous
+                prior (`_exog_prior_sigma`, docs/adr/0012), so it matters
+                even when `exog` is `None`.
 
         Returns:
-            Tuple of the built `pymc.Model` and the resolved lag order. The
-            model is typed `Any` so that importing `impulso.spec` does not
-            pull in PyMC — the same reason `FittedVAR.pymc_model` is.
+            `VARModelHandles` wrapping the intercept, coefficient,
+            volatility and likelihood variables this call registered.
+
+        Raises:
+            ValueError: If any entry of the scale — computed or supplied via
+                `endog_scales` — is zero, negative or non-finite (issue 07b).
         """
         import pymc as pm
 
         # Lazy: `_conjugate` imports scipy at module level, and `spec` is on
         # the package import path.
         from impulso._conjugate import ar1_residual_sd
-        from impulso._lag_selection import select_lag_order
 
-        # Resolve lags
-        if isinstance(self.lags, str):
-            max_lags = self.max_lags or 12
-            ic = select_lag_order(data, max_lags=max_lags)
-            n_lags = getattr(ic, self.lags)
-        else:
-            n_lags = self.lags
+        model = pm.modelcontext(None)
 
-        # Build prior arrays. `sigma` is the per-variable AR(1) residual
-        # standard deviation — computed once here and reused for both the
-        # Minnesota lag-coefficient prior (cross-lag sigma_i/sigma_j scaling,
-        # docs/adr/0015) and the exogenous-coefficient prior below (#192).
-        # Validated immediately: a zero/non-finite entry would blow up both
-        # (issue 07b).
-        prior = self.resolved_prior
-        n_vars = data.endog.shape[1]
-        sigma = ar1_residual_sd(data.endog)
-        _validate_sigma_is_usable(sigma, data.endog_names)
-        prior_params = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)
+        # `sigma` is the per-variable scale — computed once here (or taken
+        # from the caller) and reused for both the Minnesota lag-coefficient
+        # prior (cross-lag sigma_i/sigma_j scaling, docs/adr/0015) and the
+        # exogenous-coefficient prior below (#192). Validated immediately,
+        # whichever way it arrived: a zero/non-finite entry would blow up
+        # both (issue 07b).
+        n_vars = endog.shape[1]
+        sigma = endog_scales if endog_scales is not None else ar1_residual_sd(endog)
+        _validate_sigma_is_usable(sigma, endog_names)
+        prior_params = self.resolved_prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)
 
-        # Build data matrices
-        y = data.endog
-        Y, X_lag, X_exog = build_lag_design_matrix(y, n_lags, data.exog)
+        Y, X_lag, X_exog = build_lag_design_matrix(endog, n_lags, exog)
 
-        # OLS residuals seed per-variable SV priors. Constant-volatility adapters
-        # ignore `data`; only stochastic adapters use it.
+        # OLS pre-fit residuals seed the volatility process's per-variable
+        # priors. Stays on the numpy path deliberately — it needs concrete
+        # data even for a future caller whose `endog` is symbolic.
+        # Constant-volatility adapters ignore this; only stochastic ones use it.
         if X_exog is not None:
             X_full = np.hstack([np.ones((Y.shape[0], 1)), X_lag, X_exog])
         else:
@@ -393,61 +469,116 @@ class VAR(ImpulsoBaseModel):
         # by variable and by "L<lag>.<variable>" coefficient instead of positional
         # `B_dim_0` / `B_dim_1`. Variable names come from `impulso._posterior` —
         # the schema ConjugateVAR constructs against too, so both estimators
-        # agree. `coeff` is lag-major to mirror the X_lag hstack above.
+        # agree. `coeff` is lag-major to mirror the X_lag hstack above. Not
+        # prefixed by a nested `pm.Model(name=...)` — see the docstring above.
         coords: dict[str, object] = {
-            "var": data.endog_names,
-            "var1": data.endog_names,
-            "var2": data.endog_names,
-            "coeff": [f"L{lag}.{name}" for lag in range(1, n_lags + 1) for name in data.endog_names],
-            "time": data.index[n_lags:],
+            "var": list(endog_names),
+            "var1": list(endog_names),
+            "var2": list(endog_names),
+            "coeff": [f"L{lag}.{name}" for lag in range(1, n_lags + 1) for name in endog_names],
         }
-        if data.exog_names is not None:
-            coords["exog"] = data.exog_names
+        if exog_names is not None:
+            coords["exog"] = list(exog_names)
+        if "time" not in model.coords:
+            # PyMC requires a named dim used on an *observed* multivariate RV
+            # to already exist (unlike a free RV's `dims`, which it will
+            # auto-register). `_build_pymc_model` pre-registers "time" from
+            # `data.index` before calling this method; a standalone call
+            # with no pre-registered "time" coord falls back to a plain
+            # positional index.
+            coords["time"] = list(range(Y.shape[0]))
+        model.add_coords(coords)
 
-        # Build PyMC model
-        with pm.Model(coords=coords) as model:
-            # Intercept
-            intercept = pm.Normal(INTERCEPT, mu=0, sigma=1, dims="var")
+        # Intercept
+        intercept = pm.Normal(INTERCEPT, mu=0, sigma=1, dims="var")
 
-            # VAR coefficients with Minnesota prior
-            B = pm.Normal(
-                COEFFICIENTS,
-                mu=prior_params["B_mu"],
-                sigma=prior_params["B_sigma"],
-                dims=("var", "coeff"),
+        # VAR coefficients with Minnesota prior
+        B = pm.Normal(
+            COEFFICIENTS,
+            mu=prior_params["B_mu"],
+            sigma=prior_params["B_sigma"],
+            dims=("var", "coeff"),
+        )
+
+        # Exogenous coefficients. The prior scales with the data so that it
+        # encodes the same belief regardless of the units the regressors
+        # happen to be measured in (#192).
+        if X_exog is not None:
+            B_exog = pm.Normal(
+                EXOG_COEFFICIENTS,
+                mu=0,
+                sigma=_exog_prior_sigma(sigma, X_exog, self.exog_prior_scale, exog_names),
+                dims=("var", "exog"),
             )
+            mu = intercept + pm.math.dot(X_lag, B.T) + pm.math.dot(X_exog, B_exog.T)
+        else:
+            B_exog = None
+            mu = intercept + pm.math.dot(X_lag, B.T)
 
-            # Exogenous coefficients. The prior scales with the data so that it
-            # encodes the same belief regardless of the units the regressors
-            # happen to be measured in (#192).
-            if X_exog is not None:
-                B_exog = pm.Normal(
-                    EXOG_COEFFICIENTS,
-                    mu=0,
-                    sigma=_exog_prior_sigma(sigma, X_exog, self.exog_prior_scale, data.exog_names),
-                    dims=("var", "exog"),
-                )
-                mu = intercept + pm.math.dot(X_lag, B.T) + pm.math.dot(X_exog, B_exog.T)
-            else:
-                mu = intercept + pm.math.dot(X_lag, B.T)
+        # Volatility process: registers latent vars, returns L (Cholesky factor of Σ_t).
+        # For constant volatility, L is (n_vars, n_vars) and time-invariant.
+        # For stochastic volatility, L is (T, n_vars, n_vars) — per-t.
+        volatility = self.resolved_volatility
+        L = volatility.build_pymc_latent(n_vars=n_vars, T=Y.shape[0], data=resid)
+        # Sigma deterministic is only registered for time-invariant L —
+        # for SV, materialising (T, n, n) per draw is wasteful; users can
+        # reconstruct per-t Σ via `volatility.cholesky_at(posterior, t)`.
+        if L.ndim == 2:
+            pm.Deterministic("Sigma", pm.math.dot(L, L.T), dims=("var1", "var2"))
 
-            # Volatility process: registers latent vars, returns L (Cholesky factor of Σ_t).
-            # For constant volatility, L is (n_vars, n_vars) and time-invariant.
-            # For stochastic volatility, L is (T, n_vars, n_vars) — per-t.
-            volatility = self.resolved_volatility
-            L = volatility.build_pymc_latent(n_vars=n_vars, T=Y.shape[0], data=resid)
-            # Sigma deterministic is only registered for time-invariant L —
-            # for SV, materialising (T, n, n) per draw is wasteful; users can
-            # reconstruct per-t Σ via `volatility.cholesky_at(posterior, t)`.
-            if L.ndim == 2:
-                pm.Deterministic("Sigma", pm.math.dot(L, L.T), dims=("var1", "var2"))
+        # Likelihood. The error-distribution seam owns which law is
+        # registered; PyMC handles batched chol natively either way (for
+        # 2D L every observation uses the same chol; for 3D L (T, n, n)
+        # observation t uses chol[t]). Under Student-t errors, L L' is the
+        # *scale* matrix rather than the covariance — see ADR-0007.
+        error_dist = self.resolved_error_dist
+        obs = error_dist.build_likelihood("obs", mu=mu, chol=L, observed=Y, dims=("time", "var"))
 
-            # Likelihood. The error-distribution seam owns which law is
-            # registered; PyMC handles batched chol natively either way (for
-            # 2D L every observation uses the same chol; for 3D L (T, n, n)
-            # observation t uses chol[t]). Under Student-t errors, L L' is the
-            # *scale* matrix rather than the covariance — see ADR-0007.
-            error_dist = self.resolved_error_dist
-            error_dist.build_likelihood("obs", mu=mu, chol=L, observed=Y, dims=("time", "var"))
+        return VARModelHandles(intercept=intercept, B=B, B_exog=B_exog, L=L, obs=obs)
+
+    def _build_pymc_model(self, data: VARData) -> tuple[Any, int]:
+        """Build the PyMC model graph for this specification.
+
+        Resolves the lag order (running `select_lag_order` when `lags` is a
+        criterion string), opens a fresh `pymc.Model`, and delegates to
+        `build_in_model` to register the intercept, coefficient, exogenous,
+        volatility and likelihood nodes. The design matrices are baked into
+        the graph as constants, so the returned model is tied to `data`.
+
+        Shared by `fit` (which samples the graph) and `prior_predictive`
+        (which draws from it without conditioning on the observations).
+
+        Args:
+            data: VARData instance.
+
+        Returns:
+            Tuple of the built `pymc.Model` and the resolved lag order. The
+            model is typed `Any` so that importing `impulso.spec` does not
+            pull in PyMC — the same reason `FittedVAR.pymc_model` is.
+        """
+        import pymc as pm
+
+        from impulso._lag_selection import select_lag_order
+
+        # Resolve lags
+        if isinstance(self.lags, str):
+            max_lags = self.max_lags or 12
+            ic = select_lag_order(data, max_lags=max_lags)
+            n_lags = getattr(ic, self.lags)
+        else:
+            n_lags = self.lags
+
+        # "time" is registered here, from `data.index`, rather than inside
+        # `build_in_model` — that method has no date index to draw one
+        # from, only arrays. Registering it before `build_in_model` runs
+        # means the likelihood's `dims=("time", "var")` binds to real dates.
+        with pm.Model(coords={"time": data.index[n_lags:]}) as model:
+            self.build_in_model(
+                endog=data.endog,
+                exog=data.exog,
+                n_lags=n_lags,
+                endog_names=data.endog_names,
+                exog_names=data.exog_names,
+            )
 
         return model, n_lags

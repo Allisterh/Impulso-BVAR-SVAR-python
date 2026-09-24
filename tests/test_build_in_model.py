@@ -9,9 +9,8 @@ model is active on entry. Two kinds of test live here:
   only the pre-existing `_build_pymc_model` surface and must pass unchanged
   whether the graph is built inline or delegated to `build_in_model` — they
   are not `xfail`-marked.
-* Tests of the new public method (`TestBuildInModel`) necessarily fail
-  before `build_in_model` exists and are `xfail(strict=True)` until issue
-  08a's implementation lands.
+* Tests of the new public method (`TestBuildInModel`) exercise
+  `VAR.build_in_model` directly.
 """
 
 import numpy as np
@@ -114,14 +113,8 @@ class TestLagDesignMatrixUsage:
 
 
 class TestBuildInModel:
-    """Direct tests of the new public `VAR.build_in_model` (issue 08a).
+    """Direct tests of the new public `VAR.build_in_model` (issue 08a)."""
 
-    All `xfail(strict=True)`: `build_in_model` does not exist yet on the
-    tests branch. `reason` names the issue so a future maintainer diffing
-    xfail reasons for staleness can tell why each one is here.
-    """
-
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_direct_call_matches_wrapper_logp(self, rng):
         """Calling `build_in_model` directly inside a fresh model gives the
         same log-probability as the wrapper (acceptance criterion 2)."""
@@ -145,7 +138,6 @@ class TestBuildInModel:
 
         assert direct_logp == pytest.approx(wrapper_logp)
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_direct_call_matches_wrapper_logp_with_exog_and_student_t(self, rng):
         import pymc as pm
 
@@ -167,7 +159,6 @@ class TestBuildInModel:
 
         assert direct_logp == pytest.approx(wrapper_logp)
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_returns_handles_with_intercept_b_bexog_l_and_likelihood(self, rng):
         import pymc as pm
 
@@ -189,7 +180,6 @@ class TestBuildInModel:
         assert handles.L is not None
         assert handles.obs is not None
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_returns_none_b_exog_when_no_exog(self, rng):
         import pymc as pm
 
@@ -206,7 +196,6 @@ class TestBuildInModel:
 
         assert handles.B_exog is None
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_registers_into_the_active_model_context(self, rng):
         """No prefix argument: `build_in_model` writes into `pymc.modelcontext(None)`."""
         import pymc as pm
@@ -226,7 +215,6 @@ class TestBuildInModel:
         assert "B" in model.named_vars
         assert "obs" in model.named_vars
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_uses_shared_lag_design_matrix_builder(self, rng, monkeypatch):
         import pymc as pm
 
@@ -256,7 +244,6 @@ class TestBuildInModel:
         assert got_n_lags == 1
         assert got_exog is None
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_nested_named_model_prefixes_variables_but_not_coords(self, rng):
         """Inside `pm.Model(name=...)`, every Impulso variable, deterministic
         and the likelihood come out prefixed; coords land unprefixed on the
@@ -283,7 +270,6 @@ class TestBuildInModel:
         assert "var" in root.coords
         assert list(root.coords["var"]) == data.endog_names
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_unnested_names_are_unchanged(self, rng):
         """Outside a nested named model, names carry no prefix."""
         import pymc as pm
@@ -303,7 +289,6 @@ class TestBuildInModel:
         assert "B" in model.named_vars
         assert "obs" in model.named_vars
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_time_coord_length_mismatch_raises(self, rng):
         """Two VARs embedded in the same root model must not silently share
         a stale `time` coordinate when their likelihoods have a different
@@ -337,7 +322,6 @@ class TestBuildInModel:
         # The first VAR's own registration is untouched by the second call's failure.
         assert "a::obs" in root.named_vars
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_time_coord_matching_length_is_fine(self, rng):
         """Equal-length `time` coords — including the wrapper's real dates —
         are not a collision; only a length mismatch is rejected."""
@@ -366,7 +350,6 @@ class TestBuildInModel:
         assert "a::obs" in root.named_vars
         assert "b::obs" in root.named_vars
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_endog_scales_overrides_the_default_ar1_residual_sd(self, rng):
         """`endog_scales=None` computes sigma from the data; a caller-supplied
         array is used as-is instead (issue 08a's `endog_scales` argument)."""
@@ -403,7 +386,6 @@ class TestBuildInModel:
         np.testing.assert_allclose(custom_sigma, expected_custom)
         assert not np.allclose(default_sigma, custom_sigma)
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_endog_scales_feeds_the_minnesota_cross_lag_prior(self, rng):
         """`endog_scales` is the same sigma `Prior.build_priors` scales the
         Minnesota cross-lag entries by (docs/adr/0015), not only the exog prior."""
@@ -426,7 +408,6 @@ class TestBuildInModel:
         expected = spec.resolved_prior.build_priors(n_vars=2, n_lags=1, sigma=custom_scales)["B_sigma"]
         np.testing.assert_allclose(got, expected)
 
-    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
     def test_endog_scales_are_validated(self, rng):
         """A caller-supplied scale gets the same zero/non-finite guard as the
         data-derived one (issue 07b), naming the offending column."""
