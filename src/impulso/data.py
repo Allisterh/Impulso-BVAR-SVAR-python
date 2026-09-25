@@ -35,6 +35,15 @@ class VARData(ImpulsoBaseModel):
     identified; it is rejected rather than silently soaking up an arbitrary
     share of the intercept.
 
+    Endogenous columns must vary within the sample too (issue 07b). A
+    constant series has no residual variance for any VAR estimator to fit,
+    and once a Minnesota-style prior scales its cross-lag terms by each
+    column's AR(1) residual scale (`sigma_i / sigma_j`, docs/adr/0015), a
+    zero `sigma` collapses that variable's own row of the prior toward zero
+    and sends every other row's coefficient on its lag toward infinity or
+    `nan`. A column that merely varies little is not affected — only an
+    exactly-constant one is rejected.
+
     Every value must be finite. NaN or Inf in either block is rejected at
     construction, not left to surface later as a failed fit or an all-NaN
     posterior.
@@ -45,6 +54,7 @@ class VARData(ImpulsoBaseModel):
 
     Attributes:
         endog: Endogenous variable array of shape (T, n) where T >= 1 and n >= 2.
+            Every column must vary within the sample (issue 07b).
         endog_names: Names for each endogenous variable. Must be unique.
         exog: Optional exogenous variable array of shape (T, k). Every column
             must take at least two distinct values. Endogenous variables are
@@ -67,6 +77,7 @@ class VARData(ImpulsoBaseModel):
     def _validate(self) -> Self:
         t, n = self.endog.shape
         self._validate_shapes(t, n)
+        self._validate_endog_varies(self.endog, self.endog_names)
         self._validate_exog(t)
         self._validate_unique_names()
         self._validate_finite()
@@ -80,6 +91,33 @@ class VARData(ImpulsoBaseModel):
             raise ValueError(f"endog_names length {len(self.endog_names)} != endog columns {n}")
         if len(self.index) != t:
             raise ValueError(f"index length {len(self.index)} != endog rows {t}")
+
+    @staticmethod
+    def _validate_endog_varies(endog: np.ndarray, endog_names: Sequence[str]) -> None:
+        """Reject endogenous columns that are exactly constant (issue 07b).
+
+        A constant series has zero residual variance, so no VAR estimator —
+        conjugate or PyMC — has a coherent shock to fit for it: the
+        covariance matrix is singular in that row/column. Keying the
+        Minnesota cross-lag prior off each column's AR(1) residual scale
+        (`sigma_i / sigma_j`, docs/adr/0015) makes the failure sharper still:
+        a zero `sigma` collapses that column's own row of the prior toward
+        zero, sends every other row's coefficient on its lag toward
+        infinity, and turns the own-lag entry into `0.0 / 0.0 = nan`.
+        Mirrors `_validate_exog_varies` below.
+        """
+        # NaN/Inf columns give a NaN range, which is not == 0; they fall through to
+        # the finiteness check instead, whose message names the real problem.
+        constant = [name for name, col in zip(endog_names, endog.T, strict=True) if np.ptp(col).item() == 0.0]
+        if constant:
+            raise ValueError(
+                f"endog columns must vary within the sample, got constant columns: {_format_names(constant)}. "
+                "A constant endogenous series has no residual variance for any VAR estimator to fit, and "
+                "collapses the Minnesota cross-lag prior's sigma_i/sigma_j scaling (docs/adr/0015) toward "
+                "zero in its own equation while sending every other equation's coefficient on its lag "
+                "toward infinity or nan. Drop the column — a variable that never moves carries no dynamics "
+                "to model jointly with the others."
+            )
 
     def _validate_exog(self, t: int) -> None:
         if self.exog is not None:

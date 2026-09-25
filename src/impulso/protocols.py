@@ -22,7 +22,27 @@ if TYPE_CHECKING:
 class Prior(Protocol):
     """Contract for prior specifications."""
 
-    def build_priors(self, n_vars: int, n_lags: int) -> dict[str, np.ndarray]: ...
+    def build_priors(self, n_vars: int, n_lags: int, *, sigma: np.ndarray) -> dict[str, np.ndarray]:
+        """Build prior mean and standard deviation arrays for VAR coefficients.
+
+        Args:
+            n_vars: Number of endogenous variables.
+            n_lags: Number of lags.
+            sigma: Per-endogenous-variable scale, shape `(n_vars,)` — the AR(1)
+                residual standard deviation of each series
+                (`impulso._conjugate.ar1_residual_sd`), the same scale the
+                conjugate `NIWPrior` already keys its lag-coefficient prior off
+                of via `minnesota_dummies`. Required and keyword-only: a prior
+                that has no use for the data's scale (e.g. a flat prior) still
+                takes the argument, it just ignores it. `VAR.fit` computes this
+                once from the fitted data and passes it here; a future seam may
+                let callers supply their own scales instead (docs/adr/0015).
+
+        Returns:
+            Dictionary with keys `"B_mu"` and `"B_sigma"` as numpy arrays, each
+            of shape `(n_vars, n_vars * n_lags)`.
+        """
+        ...
 
 
 @runtime_checkable

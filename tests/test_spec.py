@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from impulso._arviz_compat import make_idata
+from impulso._conjugate import ar1_residual_sd
 from impulso.data import VARData
 from impulso.priors import MinnesotaPrior
 from impulso.spec import VAR, _exog_prior_sigma
@@ -114,7 +115,11 @@ class TestPyMCModelBuild:
         from impulso._lag_selection import select_lag_order  # noqa: F401 — import-side-effect parity
 
         spec = VAR(lags=1)
-        prior_params = spec.resolved_prior.build_priors(n_vars=2, n_lags=1)
+        prior_params = spec.resolved_prior.build_priors(
+            n_vars=2,
+            n_lags=1,
+            sigma=np.ones(2),
+        )
         volatility = spec.resolved_volatility
 
         y = var_data_2v.endog
@@ -286,16 +291,21 @@ class TestExogPriorScaleField:
 
 
 class TestExogPriorSigma:
-    """`_exog_prior_sigma` puts the B_exog prior in contribution space (#192)."""
+    """`_exog_prior_sigma` puts the B_exog prior in contribution space (#192).
+
+    `_exog_prior_sigma` takes the per-variable `sigma` directly (issue 07a) —
+    `_build_pymc_model` computes it once via `ar1_residual_sd` and shares it
+    with `Prior.build_priors`, so these tests compute it the same way rather
+    than passing raw `endog` in.
+    """
 
     def test_matches_independent_formula(self, rng):
-        from impulso._conjugate import ar1_residual_sd
-
         endog = rng.standard_normal((120, 3))
         exog = rng.standard_normal((120, 2)) * np.array([0.01, 500.0])
+        sigma = ar1_residual_sd(endog)
 
-        got = _exog_prior_sigma(endog, exog, 100.0)
-        expected = 100.0 * np.outer(ar1_residual_sd(endog), 1.0 / exog.std(axis=0, ddof=1))
+        got = _exog_prior_sigma(sigma, exog, 100.0)
+        expected = 100.0 * np.outer(sigma, 1.0 / exog.std(axis=0, ddof=1))
 
         assert got.shape == (3, 2)
         np.testing.assert_allclose(got, expected)
@@ -303,10 +313,11 @@ class TestExogPriorSigma:
     def test_scale_is_linear(self, rng):
         endog = rng.standard_normal((120, 2))
         exog = rng.standard_normal((120, 3))
+        sigma = ar1_residual_sd(endog)
 
         np.testing.assert_allclose(
-            _exog_prior_sigma(endog, exog, 5.0),
-            0.05 * _exog_prior_sigma(endog, exog, 100.0),
+            _exog_prior_sigma(sigma, exog, 5.0),
+            0.05 * _exog_prior_sigma(sigma, exog, 100.0),
         )
 
     def test_tiny_scale_regressor_gets_a_huge_prior_sd(self, rng):
@@ -314,49 +325,50 @@ class TestExogPriorSigma:
         endog = rng.standard_normal((120, 2))
         tiny = rng.standard_normal((120, 1)) * 0.01
         ordinary = tiny / 0.01
+        sigma = ar1_residual_sd(endog)
 
-        ratio = _exog_prior_sigma(endog, tiny, 100.0) / _exog_prior_sigma(endog, ordinary, 100.0)
+        ratio = _exog_prior_sigma(sigma, tiny, 100.0) / _exog_prior_sigma(sigma, ordinary, 100.0)
         np.testing.assert_allclose(ratio, 100.0)
 
     def test_floor_fires_on_a_numerically_flat_column(self, rng):
         """A column with negligible spread falls back to a level-derived scale."""
-        from impulso._conjugate import ar1_residual_sd
         from impulso.spec import _EXOG_SD_FLOOR_FRACTION
 
         endog = rng.standard_normal((120, 2))
         col = (1.0 + 1e-13 * rng.standard_normal(120))[:, None]
+        sigma = ar1_residual_sd(endog)
 
-        got = _exog_prior_sigma(endog, col, 100.0)
+        got = _exog_prior_sigma(sigma, col, 100.0)
         floor = _EXOG_SD_FLOOR_FRACTION * np.abs(col).max()
-        expected = 100.0 * np.outer(ar1_residual_sd(endog), 1.0 / np.array([floor]))
+        expected = 100.0 * np.outer(sigma, 1.0 / np.array([floor]))
 
         assert np.isfinite(got).all()
         np.testing.assert_allclose(got, expected)
         # The floor is doing real work: the raw sd would give a prior ~1e10 wider.
-        unfloored = 100.0 * np.outer(ar1_residual_sd(endog), 1.0 / col.std(axis=0, ddof=1))
+        unfloored = 100.0 * np.outer(sigma, 1.0 / col.std(axis=0, ddof=1))
         assert (got < unfloored / 1e9).all()
 
     def test_floor_does_not_fire_on_a_step_dummy(self, rng):
         """A 0/1 break at 75% has real spread, so the raw sd is used."""
-        from impulso._conjugate import ar1_residual_sd
-
         endog = rng.standard_normal((120, 2))
         dummy = np.zeros((120, 1))
         dummy[90:] = 1.0
+        sigma = ar1_residual_sd(endog)
 
         raw_sd = dummy.std(axis=0, ddof=1)
         floor = 1e-3 * np.abs(dummy).max(axis=0)
         assert raw_sd[0] > floor[0], "fixture no longer exercises the non-floored path"
 
-        expected = 100.0 * np.outer(ar1_residual_sd(endog), 1.0 / raw_sd)
-        np.testing.assert_allclose(_exog_prior_sigma(endog, dummy, 100.0), expected)
+        expected = 100.0 * np.outer(sigma, 1.0 / raw_sd)
+        np.testing.assert_allclose(_exog_prior_sigma(sigma, dummy, 100.0), expected)
 
     def test_rejects_column_that_is_all_zero_after_lag_trimming(self, rng):
         endog = rng.standard_normal((120, 2))
         pulse = np.zeros((120, 1))
+        sigma = ar1_residual_sd(endog)
 
         with pytest.raises(ValueError, match=r"constant over the estimation sample: 'pulse'"):
-            _exog_prior_sigma(endog, pulse, 100.0, ["pulse"])
+            _exog_prior_sigma(sigma, pulse, 100.0, ["pulse"])
 
     def test_rejects_column_that_is_constant_nonzero_after_lag_trimming(self, rng):
         """The floor must not rescue a column that is flat at a non-zero level.
@@ -369,15 +381,17 @@ class TestExogPriorSigma:
         """
         endog = rng.standard_normal((120, 2))
         flat = np.ones((120, 1))
+        sigma = ar1_residual_sd(endog)
 
         with pytest.raises(ValueError, match=r"constant over the estimation sample: 'early_break'") as exc:
-            _exog_prior_sigma(endog, flat, 100.0, ["early_break"])
+            _exog_prior_sigma(sigma, flat, 100.0, ["early_break"])
         assert "reduce `lags`" in str(exc.value)
 
     def test_constant_column_error_falls_back_to_column_index(self, rng):
         endog = rng.standard_normal((120, 2))
+        sigma = ar1_residual_sd(endog)
         with pytest.raises(ValueError, match=r"'column 0'"):
-            _exog_prior_sigma(endog, np.zeros((120, 1)), 100.0)
+            _exog_prior_sigma(sigma, np.zeros((120, 1)), 100.0)
 
 
 class TestExogPriorWiredIntoModel:
@@ -407,7 +421,7 @@ class TestExogPriorWiredIntoModel:
 
         model = self._capture(data, VAR(lags=1))
 
-        expected = _exog_prior_sigma(endog, exog[1:], 100.0)
+        expected = _exog_prior_sigma(ar1_residual_sd(endog), exog[1:], 100.0)
         np.testing.assert_allclose(_captured_sigma(model, "B_exog"), expected)
         # The old bug: a flat unit prior regardless of the regressor's units.
         assert not np.allclose(_captured_sigma(model, "B_exog"), 1.0)
@@ -421,7 +435,7 @@ class TestExogPriorWiredIntoModel:
 
         np.testing.assert_allclose(
             _captured_sigma(model, "B_exog"),
-            _exog_prior_sigma(endog, exog[1:], 5.0),
+            _exog_prior_sigma(ar1_residual_sd(endog), exog[1:], 5.0),
         )
 
     def test_sigma_uses_lag_trimmed_rows(self, rng):
@@ -432,10 +446,11 @@ class TestExogPriorWiredIntoModel:
         data = _exog_data(endog, exog, ["x"])
 
         model = self._capture(data, VAR(lags=4))
+        sigma = ar1_residual_sd(endog)
 
         got = _captured_sigma(model, "B_exog")
-        np.testing.assert_allclose(got, _exog_prior_sigma(endog, exog[4:], 100.0))
-        assert not np.allclose(got, _exog_prior_sigma(endog, exog, 100.0))
+        np.testing.assert_allclose(got, _exog_prior_sigma(sigma, exog[4:], 100.0))
+        assert not np.allclose(got, _exog_prior_sigma(sigma, exog, 100.0))
 
     def test_no_b_exog_without_exog(self, var_data_2v):
         model = self._capture(var_data_2v, VAR(lags=1))
@@ -470,7 +485,7 @@ class TestExogPriorWiredIntoModel:
         prior_predictive_model, _ = spec._build_pymc_model(data)
         got = _captured_sigma(prior_predictive_model, "B_exog")
 
-        np.testing.assert_allclose(got, _exog_prior_sigma(endog, exog[1:], 100.0))
+        np.testing.assert_allclose(got, _exog_prior_sigma(ar1_residual_sd(endog), exog[1:], 100.0))
         assert not np.allclose(got, 1.0)
         # Belt and braces: identical to what the fit path builds, so the two
         # cannot drift apart.
@@ -485,8 +500,128 @@ class TestExogPriorWiredIntoModel:
 
         np.testing.assert_allclose(
             _captured_sigma(model, "B_exog"),
-            _exog_prior_sigma(endog, exog[1:], 5.0),
+            _exog_prior_sigma(ar1_residual_sd(endog), exog[1:], 5.0),
         )
+
+
+class TestMinnesotaPriorSigmaWiredIntoModel:
+    """`VAR._build_pymc_model` passes `ar1_residual_sd(data.endog)` to
+    `MinnesotaPrior.build_priors` (issue 07a): the coefficient prior sampled
+    in the real graph must match what `build_priors` returns for that sigma,
+    not a unit-scale baseline.
+    """
+
+    def test_b_sigma_matches_ar1_residual_sd_scaling(self, rng):
+        endog = rng.standard_normal((150, 3)) * np.array([1.0, 20.0, 0.05])
+        data = VARData(
+            endog=endog,
+            endog_names=["y1", "y2", "y3"],
+            index=pd.date_range("2000-01-01", periods=150, freq="QS"),
+        )
+        sigma = ar1_residual_sd(endog)
+        spec = VAR(lags=2)
+
+        model, _ = spec._build_pymc_model(data)
+        got = _captured_sigma(model, "B")
+
+        expected = MinnesotaPrior().build_priors(
+            n_vars=3,
+            n_lags=2,
+            sigma=sigma,
+        )["B_sigma"]
+        np.testing.assert_allclose(got, expected)
+        # The scaling is doing real work: heterogeneous sigma must not match
+        # the sigma=1 (no cross-lag scaling) baseline.
+        baseline = MinnesotaPrior().build_priors(
+            n_vars=3,
+            n_lags=2,
+            sigma=np.ones(3),
+        )["B_sigma"]
+        assert not np.allclose(got, baseline)
+
+
+class TestValidateSigmaIsUsable:
+    """`_validate_sigma_is_usable` guards the shared `sigma` before it reaches
+    `Prior.build_priors` or `_exog_prior_sigma` (issue 07b).
+    """
+
+    def test_rejects_zero_entry_and_names_the_column(self):
+        from impulso.spec import _validate_sigma_is_usable
+
+        sigma = np.array([1.0, 0.0, 2.0])
+        with pytest.raises(ValueError, match=r"'y2'"):
+            _validate_sigma_is_usable(sigma, ["y1", "y2", "y3"])
+
+    @pytest.mark.parametrize("bad_value", [0.0, -1.0, np.nan, np.inf])
+    def test_rejects_non_positive_or_non_finite(self, bad_value):
+        from impulso.spec import _validate_sigma_is_usable
+
+        sigma = np.array([1.0, bad_value])
+        with pytest.raises(ValueError, match="zero, negative, or non-finite"):
+            _validate_sigma_is_usable(sigma, ["y1", "y2"])
+
+    def test_accepts_all_positive_finite(self):
+        from impulso.spec import _validate_sigma_is_usable
+
+        _validate_sigma_is_usable(np.array([1.0, 1e-10, 5.0]), ["y1", "y2", "y3"])  # must not raise
+
+
+class TestBuildPymcModelRejectsDegenerateSigma:
+    """`_build_pymc_model` validates the `sigma` it computes before handing it to
+    the prior or `_exog_prior_sigma` (issue 07b). A column need not be literally
+    constant to trigger this: an exactly-determined AR(1) fit (a very short,
+    noiseless sample) can also give `sigma == 0` for a column `VARData` accepts
+    because it does vary.
+    """
+
+    def test_rejects_a_column_with_exactly_zero_ar1_residual_sd(self, rng, monkeypatch):
+        """A column need not be literally constant to trigger this guard: any
+        column `ar1_residual_sd` happens to report a zero (or non-finite) scale
+        for is caught, whatever produced that scale.
+
+        `ar1_residual_sd` is forced to return an exact zero here rather than
+        relying on a short/noiseless sample landing on exact-zero round-off
+        naturally: `np.linalg.lstsq`'s residual for such a sample is only
+        *machine-epsilon-small*, and how small depends on the BLAS/LAPACK
+        backend, so it is not bit-exact `0.0` on every platform or numpy
+        version (observed as low as ~6e-15, not 0.0, on some CI jobs). Forcing
+        the value keeps the test deterministic while still exercising the real
+        `_build_pymc_model` guard path against the real (varying, non-constant)
+        `endog` data.
+        """
+        import impulso._conjugate as conjugate
+
+        endog = rng.standard_normal((150, 2))  # ordinary, genuinely varying data
+        data = VARData(
+            endog=endog,
+            endog_names=["y1", "y2"],
+            index=pd.date_range("2000-01-01", periods=150, freq="QS"),
+        )
+        spec = VAR(lags=1)
+
+        monkeypatch.setattr(conjugate, "ar1_residual_sd", lambda y: np.array([1.0, 0.0]))
+
+        with pytest.raises(ValueError, match=r"'y2'"):
+            spec._build_pymc_model(data)
+
+    def test_prior_predictive_accepts_a_near_constant_column(self, rng):
+        """A column that varies, however little, is not rejected (criterion 2)."""
+        near_constant = 1.0 + 1e-12 * rng.standard_normal(150)
+        ordinary = rng.standard_normal(150)
+        endog = np.column_stack([near_constant, ordinary])
+        data = VARData(
+            endog=endog,
+            endog_names=["almost_flat", "y"],
+            index=pd.date_range("2000-01-01", periods=150, freq="QS"),
+        )
+        spec = VAR(lags=1)
+
+        model, _ = spec._build_pymc_model(data)
+        got = _captured_sigma(model, "B")
+        assert np.isfinite(got).all()
+        # The near-constant column's cross-lag ratio really is huge -- accepted,
+        # not floored (docs/adr/0015).
+        assert got.max() > 1e6
 
 
 def _capture_model(var_data, **var_kwargs):

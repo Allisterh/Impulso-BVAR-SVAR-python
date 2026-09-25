@@ -40,8 +40,51 @@ _ERROR_DIST_REGISTRY: dict[str, type] = {
 _EXOG_SD_FLOOR_FRACTION: float = 1e-3
 
 
+def _validate_sigma_is_usable(sigma: np.ndarray, endog_names: Sequence[str]) -> None:
+    """Reject a per-variable scale that would break every prior dividing by it (issue 07b).
+
+    `sigma` (`ar1_residual_sd(data.endog)`) is computed once in `_build_pymc_model`
+    and shared by `Prior.build_priors` — whose Minnesota cross-lag entries scale by
+    `sigma[i] / sigma[j]` (docs/adr/0015) — and by `_exog_prior_sigma` below. A zero
+    entry collapses that column's own row of the coefficient prior toward zero,
+    sends every other row's coefficient on its lag to `inf`, and turns the own-lag
+    entry into `0.0 / 0.0 = nan`.
+
+    `VARData` already rejects endogenous columns that are exactly constant over the
+    whole sample, which is the common way a column ends up here with `sigma == 0`.
+    This check exists for the rarer column that varies (so `VARData` accepts it) but
+    is nonetheless perfectly predictable from its own first lag — a short, noiseless
+    sample or an exact linear relationship — so `ar1_residual_sd` still returns
+    exactly `0.0` for it. It does *not* fire on a column that is merely
+    near-constant: dividing by a tiny but nonzero `sigma` gives a large, finite
+    prior standard deviation (which can reach `1e12` or more — see
+    `MinnesotaPrior.build_priors`), not `inf` or `nan`, and that column is a real,
+    varying measurement whose coefficient is still identified.
+
+    Args:
+        sigma: Per-variable AR(1) residual standard deviation, shape `(n_vars,)`.
+        endog_names: Names for each endogenous variable, used only to name the
+            offending columns in the error message.
+
+    Raises:
+        ValueError: If any entry of `sigma` is zero, negative, or non-finite.
+    """
+    bad = np.flatnonzero(~np.isfinite(sigma) | (sigma <= 0.0))
+    if bad.size:
+        labels = [endog_names[i] for i in bad]
+        raise ValueError(
+            f"endog columns have a zero, negative, or non-finite scale: {_format_names(labels)}. "
+            "`ar1_residual_sd` came out non-positive (or non-finite) for these columns, and this scale "
+            "is shared by the Minnesota cross-lag prior (docs/adr/0015) and the exogenous-coefficient "
+            "prior, both of which divide by it. VARData already rejects columns that are constant over "
+            "the whole sample; this column varies but is nonetheless perfectly predictable from its own "
+            "first lag (e.g. a very short, noiseless sample), so its residual scale is exactly zero. Add "
+            "noise, drop the column, or otherwise make its scale identified."
+        )
+
+
 def _exog_prior_sigma(
-    endog: np.ndarray,
+    sigma: np.ndarray,
     x_exog: np.ndarray,
     scale: float,
     exog_names: Sequence[str] | None = None,
@@ -58,15 +101,19 @@ def _exog_prior_sigma(
         sd[i, j] = scale * sigma_i / s_j
 
     where `sigma_i` is the AR(1) residual standard deviation of endogenous
-    variable `i` (the same scale the Minnesota prior uses) and `s_j` is the
-    sample standard deviation of exogenous column `j`. One prior standard
-    deviation of `B_exog[i, j]` then moves variable `i` by `scale` of its own
-    residual standard deviation when regressor `j` moves by one of its own.
-    The default `scale` is deliberately loose (see `VAR.exog_prior_scale`).
+    variable `i` (the same scale `MinnesotaPrior.build_priors` uses for its lag
+    coefficients — see docs/adr/0015) and `s_j` is the sample standard
+    deviation of exogenous column `j`. One prior standard deviation of
+    `B_exog[i, j]` then moves variable `i` by `scale` of its own residual
+    standard deviation when regressor `j` moves by one of its own. The default
+    `scale` is deliberately loose (see `VAR.exog_prior_scale`).
 
     Args:
-        endog: Endogenous data of shape `(T, n_vars)`. Passed whole — `sigma_i`
-            is a property of the series, not of the estimation sample.
+        sigma: Per-endogenous-variable AR(1) residual standard deviation,
+            shape `(n_vars,)` — `ar1_residual_sd(data.endog)`. `_build_pymc_model`
+            computes this once and passes the same array here and to
+            `Prior.build_priors`, so the coefficient and exogenous priors are
+            expressed in the same units.
         x_exog: Exogenous regressor block of shape `(T_eff, n_exog)`, already
             trimmed to the rows the likelihood sees.
         scale: Multiplier in units of "residual standard deviations of the
@@ -86,11 +133,6 @@ def _exog_prior_sigma(
             intercept, so the coefficient is not identified; the floor below
             would happily hand it a wide prior and hide that.
     """
-    # Lazy: `_conjugate` imports scipy at module level, and `spec` is on the
-    # package import path.
-    from impulso._conjugate import ar1_residual_sd
-
-    sigma = ar1_residual_sd(endog)
     s = x_exog.std(axis=0, ddof=1)
     # Checked before the floor is applied: the floor exists to tame columns with
     # tiny-but-real variation, not to manufacture a scale for columns with none.
@@ -308,6 +350,9 @@ class VAR(ImpulsoBaseModel):
         """
         import pymc as pm
 
+        # Lazy: `_conjugate` imports scipy at module level, and `spec` is on
+        # the package import path.
+        from impulso._conjugate import ar1_residual_sd
         from impulso._lag_selection import select_lag_order
 
         # Resolve lags
@@ -318,10 +363,17 @@ class VAR(ImpulsoBaseModel):
         else:
             n_lags = self.lags
 
-        # Build prior arrays
+        # Build prior arrays. `sigma` is the per-variable AR(1) residual
+        # standard deviation — computed once here and reused for both the
+        # Minnesota lag-coefficient prior (cross-lag sigma_i/sigma_j scaling,
+        # docs/adr/0015) and the exogenous-coefficient prior below (#192).
+        # Validated immediately: a zero/non-finite entry would blow up both
+        # (issue 07b).
         prior = self.resolved_prior
         n_vars = data.endog.shape[1]
-        prior_params = prior.build_priors(n_vars=n_vars, n_lags=n_lags)
+        sigma = ar1_residual_sd(data.endog)
+        _validate_sigma_is_usable(sigma, data.endog_names)
+        prior_params = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)
 
         # Build data matrices
         y = data.endog
@@ -377,7 +429,7 @@ class VAR(ImpulsoBaseModel):
                 B_exog = pm.Normal(
                     EXOG_COEFFICIENTS,
                     mu=0,
-                    sigma=_exog_prior_sigma(y, X_exog, self.exog_prior_scale, data.exog_names),
+                    sigma=_exog_prior_sigma(sigma, X_exog, self.exog_prior_scale, data.exog_names),
                     dims=("var", "exog"),
                 )
                 mu = intercept + pm.math.dot(X_lag, B.T) + pm.math.dot(X_exog, B_exog.T)

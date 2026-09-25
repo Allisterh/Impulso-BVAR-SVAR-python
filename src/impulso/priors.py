@@ -29,16 +29,79 @@ class MinnesotaPrior(ImpulsoModel):
     decay: Literal["harmonic", "geometric"] = "harmonic"
     cross_shrinkage: float = Field(0.5, ge=0, le=1)
 
-    def build_priors(self, n_vars: int, n_lags: int) -> dict[str, np.ndarray]:
+    def build_priors(self, n_vars: int, n_lags: int, *, sigma: np.ndarray) -> dict[str, np.ndarray]:
         """Build prior mean and standard deviation arrays for VAR coefficients.
+
+        The prior standard deviation on the coefficient linking lag `l` of
+        variable `j` to the equation for variable `i` is scaled by
+        `sigma[i] / sigma[j]` — the textbook Minnesota/Litterman cross-lag
+        form, and the same ratio the conjugate `NIWPrior` already applies via
+        `minnesota_dummies`. On own lags (`i == j`) the ratio is `sigma[i] /
+        sigma[i]`, which is 1 for any finite nonzero `sigma[i]`, so this
+        leaves the own-lag standard deviations unchanged; it only rescales
+        cross-lag entries. That "1" would break down if `sigma[i]` were
+        *exactly* zero (`0.0 / 0.0` is `nan`, not 1) — see the warning below
+        for why that case cannot reach here. See docs/adr/0015 for why the
+        scaling itself is always on, with no opt-out.
+
+        Warning:
+            A near-zero but nonzero `sigma[c]` (e.g. `data.endog[:, c]` is
+            numerically flat but not exactly constant) is accepted, not
+            guarded against: every cross-lag entry in row `c` (`sigma[c]` in
+            the numerator) collapses toward zero, and every cross-lag entry
+            in every *other* row that references variable `c`'s lag
+            (`sigma[c]` in the denominator) blows up instead — the ratio can
+            reach `1e12` or more for an otherwise-ordinary numerically
+            near-constant column. That is by design (issue 07b): the column
+            still varies, so it is still a real, identified variable: it
+            just gets an effectively flat, uninformative cross-lag prior
+            everywhere but its own equation.
+
+            An exactly-zero or non-finite `sigma[c]` is different in kind,
+            not degree — the own-lag entry `B_sigma[c, c]` would be `0.0 /
+            0.0`, i.e. `nan`, not the unscaled value the "ratio is 1 on own
+            lags" description above promises — and *is* rejected: see Raises
+            below. `impulso.data.VARData` also rejects endogenous columns
+            that are exactly constant over the whole sample before `sigma`
+            is ever computed from them, and `VAR._build_pymc_model` checks
+            the `sigma` it computes before calling this method, so both
+            guards run ahead of `build_priors` on the normal `VAR.fit` /
+            `VAR.prior_predictive` path (issue 07b). The check here exists
+            for callers who construct `MinnesotaPrior` and call
+            `build_priors` directly, supplying their own `sigma`.
 
         Args:
             n_vars: Number of endogenous variables.
             n_lags: Number of lags.
+            sigma: Per-variable scale, shape `(n_vars,)` — typically
+                `impulso._conjugate.ar1_residual_sd(data.endog)`. Required and
+                keyword-only (see `Prior.build_priors`). Every entry must be
+                finite and strictly positive.
 
         Returns:
             Dictionary with keys 'B_mu' and 'B_sigma' as numpy arrays.
+
+        Raises:
+            ValueError: If `sigma` does not have length `n_vars`, or if any
+                entry of `sigma` is zero, negative, or non-finite (issue 07b).
         """
+        sigma = np.asarray(sigma, dtype=float)
+        if sigma.shape != (n_vars,):
+            raise ValueError(f"sigma must have shape ({n_vars},) to match n_vars={n_vars}, got shape {sigma.shape}")
+
+        bad = np.flatnonzero(~np.isfinite(sigma) | (sigma <= 0.0))
+        if bad.size:
+            values = ", ".join(f"sigma[{i}]={sigma[i]!r}" for i in bad)
+            raise ValueError(
+                f"sigma must be finite and strictly positive for every variable, got {values}. A zero or "
+                "non-finite entry usually means the corresponding endogenous column is constant (or "
+                "otherwise degenerate): the cross-lag ratio sigma[i]/sigma[j] this method scales by "
+                "(docs/adr/0015) would collapse that column's own row toward zero, send every other row's "
+                "coefficient on its lag to inf, and turn the own-lag entry into 0.0 / 0.0 = nan. "
+                "impulso.data.VARData rejects exactly-constant endogenous columns for this reason; fix "
+                "sigma (or the data it was derived from) upstream."
+            )
+
         n_coeffs = n_vars * n_lags
 
         # B_mu: identity on the first lag block, zero elsewhere
@@ -55,7 +118,16 @@ class MinnesotaPrior(ImpulsoModel):
         is_own = col_var[np.newaxis, :] == np.arange(n_vars)[:, np.newaxis]
         cross_mask = np.where(is_own, 1.0, self.cross_shrinkage)
 
-        B_sigma = self.tightness * decay_per_col[np.newaxis, :] * cross_mask
+        # sigma[i] / sigma[j]: 1.0 on own lags (i == j), the Litterman ratio on cross
+        # lags. sigma == 0 (a constant endogenous column) would collapse row c toward
+        # zero and blow up column c in every other row -- but that is rejected above
+        # before this line runs, so sigma is guaranteed finite and strictly positive
+        # here. A near-zero (but nonzero) sigma[c] still lands the ratio in the 1e12+
+        # range; that is accepted by design, not guarded. See docs/adr/0015, the
+        # class docstring, and the Warning above (issue 07b).
+        scale_ratio = sigma[:, np.newaxis] / sigma[col_var][np.newaxis, :]
+
+        B_sigma = self.tightness * decay_per_col[np.newaxis, :] * cross_mask * scale_ratio
 
         return {"B_mu": B_mu, "B_sigma": B_sigma}
 

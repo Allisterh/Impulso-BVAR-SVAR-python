@@ -14,7 +14,7 @@ from impulso.protocols import IdentificationScheme, Prior, PyMCVolatilityProcess
 
 
 class _ConformingPrior:
-    def build_priors(self, n_vars, n_lags):
+    def build_priors(self, n_vars, n_lags, *, sigma):
         return {}
 
 
@@ -114,6 +114,19 @@ class TestVolatilityProcess:
         # Query-only adapters satisfy the parent protocol but not the sub-protocol.
         assert isinstance(_ConformingVolatility(), VolatilityProcess)
         assert not isinstance(_ConformingVolatility(), PyMCVolatilityProcess)
+
+
+class TestPriorSignature:
+    """Locks in the `(n_vars, n_lags, *, sigma)` signature (issue 07a)."""
+
+    def test_build_priors_takes_sigma_as_a_required_keyword(self):
+        import inspect
+
+        sig = inspect.signature(Prior.build_priors)
+        params = list(sig.parameters.values())
+        assert [p.name for p in params] == ["self", "n_vars", "n_lags", "sigma"]
+        assert params[3].kind == inspect.Parameter.KEYWORD_ONLY
+        assert params[3].default is inspect.Parameter.empty
 
 
 class TestIdentificationSchemeNewSignature:

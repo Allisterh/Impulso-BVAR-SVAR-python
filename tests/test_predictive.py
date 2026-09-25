@@ -13,6 +13,7 @@ matplotlib.use("Agg")
 
 from impulso import VAR, VARData
 from impulso._arviz_compat import ARVIZ_V1
+from impulso._conjugate import ar1_residual_sd
 from impulso._lag_selection import select_lag_order
 from impulso._residuals import fitted_values, reduced_form_residuals
 from impulso.fitted import FittedVAR
@@ -188,7 +189,7 @@ class TestPriorPredictive:
         idata = VAR(lags=1).prior_predictive(var_data_2v_exog, draws=4000, random_seed=0)
 
         expected = _exog_prior_sigma(
-            var_data_2v_exog.endog,
+            ar1_residual_sd(var_data_2v_exog.endog),
             var_data_2v_exog.exog[1:],
             100.0,
         )
