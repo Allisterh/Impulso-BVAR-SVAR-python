@@ -16,6 +16,8 @@ Pure NumPy/SciPy, no PyMC, no mocks, deterministic seeds.
 from dataclasses import dataclass
 
 import numpy as np
+import pandas as pd
+import pytest
 from scipy.stats import beta as beta_dist
 from scipy.stats import gamma as gamma_dist
 from scipy.stats import pareto
@@ -62,6 +64,42 @@ def _sim_var1(seed: int, t_obs: int = 400, scale: np.ndarray | None = None) -> n
     for t in range(1, total):
         y[t] = _C + _A @ y[t - 1] + scale[t] * (chol @ rng.standard_normal(n))
     return y[burn:]
+
+
+# --------------------------------------------------------------------------- design-matrix parity
+
+
+class TestDesignMatrixParity:
+    """Pins the module's `_design(y, n_lags)` contract (issue 02): a leading
+    constant column, then lag blocks in lag-major order.
+
+    The reference here is built with `pandas.DataFrame.shift`, not the
+    module's own numpy-slicing formula, so this stays a real regression
+    guard once `_design` delegates its lag stacking to the issue-02 shared
+    builder rather than a tautology dressed up as a test.
+    """
+
+    @staticmethod
+    def _reference_design(y: np.ndarray, n_lags: int) -> tuple[np.ndarray, np.ndarray]:
+        t_obs = y.shape[0] - n_lags
+        blocks = [pd.DataFrame(y).shift(lag).iloc[n_lags:].to_numpy() for lag in range(1, n_lags + 1)]
+        response = y[n_lags:]
+        return response, np.hstack([np.ones((t_obs, 1)), *blocks])
+
+    @pytest.mark.parametrize("n_lags", [1, 2, 3, 4])
+    def test_design_matches_independent_reference(self, n_lags):
+        from impulso._conjugate_sampler import _design as design_fn
+
+        rng = np.random.default_rng(3)
+        y = rng.standard_normal((50, 3))
+
+        response, x = design_fn(y, n_lags)
+        exp_response, exp_x = self._reference_design(y, n_lags)
+
+        np.testing.assert_array_equal(response, exp_response)
+        np.testing.assert_array_equal(x, exp_x)
+        assert x.shape == (50 - n_lags, 1 + 3 * n_lags)
+        np.testing.assert_array_equal(x[:, 0], 1.0)
 
 
 # --------------------------------------------------------------------------- inline volatility stub

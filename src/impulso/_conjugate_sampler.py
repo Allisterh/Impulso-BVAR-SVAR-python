@@ -25,7 +25,7 @@ Pure NumPy/SciPy; no PyMC.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
 from scipy import optimize
@@ -33,6 +33,7 @@ from scipy.special import expit
 from scipy.stats import gamma as _gamma
 
 from impulso._conjugate import ar1_residual_sd, draw_niw, log_marginal_likelihood, niw_posterior
+from impulso._design import build_lag_design_matrix
 from impulso.priors import NIWPrior
 
 
@@ -98,14 +99,18 @@ def _gamma_shape_scale(mode: float, sd: float) -> tuple[float, float]:
 
 
 def _design(y: np.ndarray, n_lags: int) -> tuple[np.ndarray, np.ndarray]:
-    """Build ``(Y, X)`` with a leading constant column, matching :func:`minnesota_dummies`."""
-    t_full, _ = y.shape
-    t_obs = t_full - n_lags
-    response = y[n_lags:]
-    cols = [np.ones((t_obs, 1))]
-    for ell in range(1, n_lags + 1):
-        cols.append(y[n_lags - ell : t_full - ell])
-    return response, np.hstack(cols)
+    """Build ``(Y, X)`` with a leading constant column, matching :func:`minnesota_dummies`.
+
+    Lag stacking is delegated to the shared :func:`~impulso._design.build_lag_design_matrix`;
+    the leading constant column is this module's own concern, not the shared builder's.
+    """
+    response, x_lag, _ = build_lag_design_matrix(y, n_lags)
+    # `y` is always a numpy array here (the conjugate sampler never sees a symbolic
+    # endog), so both outputs are concretely `np.ndarray`; the shared builder's
+    # return type is a numpy/PyTensor union for its embedded-model caller.
+    response = cast(np.ndarray, response)
+    ones = np.ones((response.shape[0], 1))
+    return response, np.hstack([ones, x_lag])
 
 
 def _rescale(Y: np.ndarray, X: np.ndarray, log_scales: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:

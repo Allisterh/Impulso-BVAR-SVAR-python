@@ -16,4 +16,5 @@
    :nosignatures:
 
    select_lag_order
+   build_lag_design_matrix
 ```

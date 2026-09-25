@@ -93,6 +93,11 @@ class TestPublicAPI:
 
         assert select_lag_order is not None
 
+    def test_build_lag_design_matrix_importable(self):
+        from impulso import build_lag_design_matrix
+
+        assert callable(build_lag_design_matrix)
+
     def test_enable_runtime_checks_importable(self):
         from impulso import enable_runtime_checks
 
