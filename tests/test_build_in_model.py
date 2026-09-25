@@ -457,7 +457,6 @@ class TestInterceptEquations:
     keep reading it unchanged.
     """
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_unknown_name_raises(self, rng):
         import pymc as pm
 
@@ -473,7 +472,6 @@ class TestInterceptEquations:
                 intercept_equations=["y1", "bogus"],  # ty: ignore[unknown-argument]
             )
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_duplicate_name_raises(self, rng):
         import pymc as pm
 
@@ -489,7 +487,6 @@ class TestInterceptEquations:
                 intercept_equations=["y1", "y1"],  # ty: ignore[unknown-argument]
             )
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_partial_subset_uses_var_intercept_coord_and_dims(self, rng):
         """A strict subset gets its own `var_intercept` coord, ordered like
         `endog_names` (canonical order), not like the caller's list."""
@@ -512,7 +509,6 @@ class TestInterceptEquations:
         assert model.named_vars_to_dims["intercept"] == ("var_intercept",)
         assert handles.intercept is not None
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_explicit_full_list_keeps_dims_var_no_new_coord(self, rng):
         """Naming every equation — in any order — collapses to today's
         `dims="var"` intercept; no `var_intercept` coord is registered, and
@@ -547,7 +543,6 @@ class TestInterceptEquations:
         explicit_logp = float(explicit_model.compile_logp()(point))
         assert explicit_logp == pytest.approx(default_logp)
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_excluded_equation_gets_a_literal_zero_not_a_missing_term(self, rng):
         """Building with only `y1` intercepted must give the same
         log-probability as building with both intercepted and `y2`'s pinned
@@ -586,7 +581,6 @@ class TestInterceptEquations:
         pinned_prior = _pinned_intercept_prior_logp(full_model, full_point, pinned=[1])
         assert partial_logp == pytest.approx(full_logp - pinned_prior)
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_excluded_equation_with_exog_gets_a_literal_zero(self, rng):
         """Same as above, but with an exogenous block present too, so the
         `B_exog` branch of `mu`'s construction is covered."""
@@ -622,7 +616,6 @@ class TestInterceptEquations:
         pinned_prior = _pinned_intercept_prior_logp(full_model, full_point, pinned=[1])
         assert partial_logp == pytest.approx(full_logp - pinned_prior)
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_all_excluded_gives_none_intercept_and_no_coord(self, rng):
         """Excluding every equation is allowed: no intercept variable is
         registered at all, and `handles.intercept` is `None`."""
@@ -644,7 +637,6 @@ class TestInterceptEquations:
         assert "intercept" not in model.named_vars
         assert "var_intercept" not in model.coords
 
-    @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_all_excluded_matches_full_model_with_intercept_pinned_to_zero(self, rng):
         """No free intercept at all must give the same log-probability as
         the default build with every intercept pinned to `0.0`, once that

@@ -87,6 +87,27 @@ def _validate_sigma_is_usable(sigma: np.ndarray, endog_names: Sequence[str]) -> 
         )
 
 
+def _intercept_mask(endog_names: Sequence[str], intercept_equations: Sequence[str] | None) -> np.ndarray:
+    """Boolean mask over `endog_names`: which equations get an intercept.
+
+    `None` means every equation. Otherwise every name must appear in
+    `endog_names`, at most once; the mask follows `endog_names`' order
+    regardless of the order `intercept_equations` lists them in.
+    """
+    if intercept_equations is None:
+        return np.ones(len(endog_names), dtype=bool)
+    unknown = [name for name in intercept_equations if name not in endog_names]
+    if unknown:
+        raise ValueError(
+            f"intercept_equations names {_format_names(unknown)}, which are not endogenous variables; "
+            f"expected a subset of endog_names ({_format_names(endog_names)})."
+        )
+    duplicates = sorted({name for name in intercept_equations if list(intercept_equations).count(name) > 1})
+    if duplicates:
+        raise ValueError(f"intercept_equations lists {_format_names(duplicates)} more than once.")
+    return np.array([name in intercept_equations for name in endog_names], dtype=bool)
+
+
 def _exog_prior_sigma(
     sigma: np.ndarray,
     x_exog: np.ndarray,
@@ -164,7 +185,11 @@ class VARModelHandles:
     nested `pm.Model(name=...)`.
 
     Attributes:
-        intercept: Per-equation intercept, `dims=("var",)`.
+        intercept: Per-equation intercept. `dims=("var",)` when every
+            equation has one (the default); `dims=("var_intercept",)`,
+            covering only the included equations, when `build_in_model` was
+            given a strict subset via `intercept_equations`; `None` when
+            `intercept_equations` excluded every equation.
         B: VAR lag coefficients, `dims=("var", "coeff")`.
         B_exog: Exogenous coefficients, `dims=("var", "exog")`, or `None`
             when no exogenous block was registered.
@@ -175,7 +200,7 @@ class VARModelHandles:
             .build_likelihood`'s return value.
     """
 
-    intercept: "pt.TensorVariable"
+    intercept: "pt.TensorVariable | None"
     B: "pt.TensorVariable"
     B_exog: "pt.TensorVariable | None"
     L: "pt.TensorVariable"
@@ -365,6 +390,7 @@ class VAR(ImpulsoBaseModel):
         endog_names: Sequence[str],
         exog_names: Sequence[str] | None = None,
         endog_scales: np.ndarray | None = None,
+        intercept_equations: Sequence[str] | None = None,
     ) -> VARModelHandles:
         """Register this VAR specification into the active PyMC model.
 
@@ -434,6 +460,19 @@ class VAR(ImpulsoBaseModel):
                 (`Prior.build_priors`, docs/adr/0015) and the exogenous
                 prior (`_exog_prior_sigma`, docs/adr/0012), so it matters
                 even when `exog` is `None`.
+            intercept_equations: Names of the endogenous equations that get
+                an intercept, a subset of `endog_names` in any order. `None`
+                (the default) means every equation — the same graph as
+                before this argument existed. An excluded equation has no
+                intercept term at all (its `mu` adds zero), so its series is
+                modelled as a zero-mean deviation around a level owned
+                elsewhere in the model. Naming every equation, in any order,
+                is the same as `None`: the intercept keeps `dims="var"`. A
+                strict subset gets its own `"var_intercept"` coordinate,
+                ordered like `endog_names` (not like this argument), and
+                like every Impulso coordinate it is not prefixed by a nested
+                model. An empty sequence registers no intercept variable,
+                and the returned handles' `intercept` is `None`.
 
         Returns:
             `VARModelHandles` wrapping the intercept, coefficient,
@@ -446,8 +485,11 @@ class VAR(ImpulsoBaseModel):
                 above.
             ValueError: If any entry of the scale — computed or supplied via
                 `endog_scales` — is zero, negative or non-finite (issue 07b).
+            ValueError: If `intercept_equations` names an equation not in
+                `endog_names`, or names one more than once.
         """
         import pymc as pm
+        import pytensor.tensor as pt
 
         # Lazy: `_conjugate` imports scipy at module level, and `spec` is on
         # the package import path.
@@ -464,6 +506,7 @@ class VAR(ImpulsoBaseModel):
         n_vars = endog.shape[1]
         sigma = endog_scales if endog_scales is not None else ar1_residual_sd(endog)
         _validate_sigma_is_usable(sigma, endog_names)
+        intercept_mask = _intercept_mask(endog_names, intercept_equations)
         prior_params = self.resolved_prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)
 
         Y, X_lag, X_exog = build_lag_design_matrix(endog, n_lags, exog)
@@ -493,6 +536,9 @@ class VAR(ImpulsoBaseModel):
         }
         if exog_names is not None:
             coords["exog"] = list(exog_names)
+        intercepted = [name for name, keep in zip(endog_names, intercept_mask, strict=True) if keep]
+        if 0 < len(intercepted) < n_vars:
+            coords["var_intercept"] = intercepted
         if "time" in model.coords:
             # A previous call (this VAR's own wrapper, or a second VAR
             # embedded in the same model — coords are not prefixed by a
@@ -526,8 +572,20 @@ class VAR(ImpulsoBaseModel):
             coords["time"] = list(range(Y.shape[0]))
         model.add_coords(coords)
 
-        # Intercept
-        intercept = pm.Normal(INTERCEPT, mu=0, sigma=1, dims="var")
+        # Intercept. Every equation gets one by default (`dims="var"`, the
+        # graph from before `intercept_equations` existed). A strict subset
+        # gets a shorter free variable on its own coord, scattered into a
+        # length-`n_vars` vector with literal zeros for the excluded
+        # equations; excluding every equation drops the term entirely.
+        if len(intercepted) == n_vars:
+            intercept = pm.Normal(INTERCEPT, mu=0, sigma=1, dims="var")
+            intercept_term = intercept
+        elif intercepted:
+            intercept = pm.Normal(INTERCEPT, mu=0, sigma=1, dims="var_intercept")
+            intercept_term = pt.zeros(n_vars)[np.flatnonzero(intercept_mask)].set(intercept)
+        else:
+            intercept = None
+            intercept_term = pt.zeros(n_vars)
 
         # VAR coefficients with Minnesota prior
         B = pm.Normal(
@@ -547,10 +605,10 @@ class VAR(ImpulsoBaseModel):
                 sigma=_exog_prior_sigma(sigma, X_exog, self.exog_prior_scale, exog_names),
                 dims=("var", "exog"),
             )
-            mu = intercept + pm.math.dot(X_lag, B.T) + pm.math.dot(X_exog, B_exog.T)
+            mu = intercept_term + pm.math.dot(X_lag, B.T) + pm.math.dot(X_exog, B_exog.T)
         else:
             B_exog = None
-            mu = intercept + pm.math.dot(X_lag, B.T)
+            mu = intercept_term + pm.math.dot(X_lag, B.T)
 
         # Volatility process: registers latent vars, returns L (Cholesky factor of Σ_t).
         # For constant volatility, L is (n_vars, n_vars) and time-invariant.
