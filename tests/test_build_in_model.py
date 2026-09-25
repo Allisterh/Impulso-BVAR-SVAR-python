@@ -399,6 +399,11 @@ class TestBuildInModel:
         default_sigma = handles_default.B_exog.owner.op.dist_params(handles_default.B_exog.owner)[1].eval()
         custom_sigma = handles_custom.B_exog.owner.op.dist_params(handles_custom.B_exog.owner)[1].eval()
 
-        expected_custom = _exog_prior_sigma(data.endog, data.exog[1:], spec.exog_prior_scale, sigma=custom_scales)
+        expected_custom = _exog_prior_sigma(
+            data.endog,
+            data.exog[1:],
+            spec.exog_prior_scale,
+            sigma=custom_scales,  # ty: ignore[unknown-argument]
+        )
         np.testing.assert_allclose(custom_sigma, expected_custom)
         assert not np.allclose(default_sigma, custom_sigma)
