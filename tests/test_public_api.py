@@ -173,7 +173,7 @@ class TestVolatilityPublicAPI:
     def test_innovation_scale_prior_importable_from_impulso(self):
         from impulso import InnovationScalePrior
         from impulso.volatility import (
-            InnovationScalePrior as DirectInnovationScalePrior,  # ty: ignore[unresolved-import]
+            InnovationScalePrior as DirectInnovationScalePrior,
         )
 
         assert InnovationScalePrior is DirectInnovationScalePrior

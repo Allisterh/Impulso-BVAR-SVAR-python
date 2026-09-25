@@ -180,11 +180,9 @@ class TestVarFitWithInnovationScalePriors:
         """A length mismatch must surface as a `ValueError` from model building,
         before the sampler is ever invoked (`_build_pymc_model` runs first in
         `VAR.fit`, so a real sampler is never reached)."""
-        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
+        from impulso.volatility import InnovationScalePrior
 
-        bad_volatility = Constant(  # ty: ignore[pydantic-discarded-extra-argument]
-            innovation_scale_priors=(InnovationScalePrior(family="halfnormal", scale=0.1),)
-        )
+        bad_volatility = Constant(innovation_scale_priors=(InnovationScalePrior(family="halfnormal", scale=0.1),))
         spec = VAR(lags=1, volatility=bad_volatility)
 
         with pytest.raises(ValueError, match="innovation_scale_priors"):
@@ -193,7 +191,7 @@ class TestVarFitWithInnovationScalePriors:
     def test_matched_length_registers_per_variable_rvs(self, var_data_2v):
         """A correctly-sized `innovation_scale_priors` builds cleanly through
         the real `VAR.fit` pipeline (intercepted before sampling)."""
-        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
+        from impulso.volatility import InnovationScalePrior
 
         priors = (
             InnovationScalePrior(family="halfnormal", scale=0.2),
@@ -201,7 +199,7 @@ class TestVarFitWithInnovationScalePriors:
         )
         spec = VAR(
             lags=1,
-            volatility=Constant(innovation_scale_priors=priors),  # ty: ignore[pydantic-discarded-extra-argument]
+            volatility=Constant(innovation_scale_priors=priors),
         )
 
         captured: dict[str, object] = {}
