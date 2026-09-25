@@ -116,7 +116,11 @@ class TestPyMCModelBuild:
         from impulso._lag_selection import select_lag_order  # noqa: F401 — import-side-effect parity
 
         spec = VAR(lags=1)
-        prior_params = spec.resolved_prior.build_priors(n_vars=2, n_lags=1, sigma=np.ones(2))
+        prior_params = spec.resolved_prior.build_priors(
+            n_vars=2,
+            n_lags=1,
+            sigma=np.ones(2),  # ty: ignore[unknown-argument]
+        )
         volatility = spec.resolved_volatility
 
         y = var_data_2v.endog
@@ -535,11 +539,19 @@ class TestMinnesotaPriorSigmaWiredIntoModel:
         model, _ = spec._build_pymc_model(data)
         got = _captured_sigma(model, "B")
 
-        expected = MinnesotaPrior().build_priors(n_vars=3, n_lags=2, sigma=sigma)["B_sigma"]
+        expected = MinnesotaPrior().build_priors(
+            n_vars=3,
+            n_lags=2,
+            sigma=sigma,  # ty: ignore[unknown-argument]
+        )["B_sigma"]
         np.testing.assert_allclose(got, expected)
         # The scaling is doing real work: heterogeneous sigma must not match
         # the sigma=1 (no cross-lag scaling) baseline.
-        baseline = MinnesotaPrior().build_priors(n_vars=3, n_lags=2, sigma=np.ones(3))["B_sigma"]
+        baseline = MinnesotaPrior().build_priors(
+            n_vars=3,
+            n_lags=2,
+            sigma=np.ones(3),  # ty: ignore[unknown-argument]
+        )["B_sigma"]
         assert not np.allclose(got, baseline)
 
 

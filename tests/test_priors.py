@@ -37,7 +37,7 @@ class TestMinnesotaPrior:
     @pytest.mark.xfail(strict=True, reason="issue 07a: build_priors doesn't accept sigma yet")
     def test_build_priors_returns_dict(self):
         prior = MinnesotaPrior()
-        result = prior.build_priors(n_vars=3, n_lags=2, sigma=np.ones(3))
+        result = prior.build_priors(n_vars=3, n_lags=2, sigma=np.ones(3))  # ty: ignore[unknown-argument]
         assert isinstance(result, dict)
         assert "B_mu" in result
         assert "B_sigma" in result
@@ -55,7 +55,7 @@ class TestMinnesotaPrior:
         """`sigma` must have shape `(n_vars,)` — a mismatch is a caller bug, not silently broadcast."""
         prior = MinnesotaPrior()
         with pytest.raises(ValueError, match="sigma must have shape"):
-            prior.build_priors(n_vars=3, n_lags=2, sigma=bad_sigma)
+            prior.build_priors(n_vars=3, n_lags=2, sigma=bad_sigma)  # ty: ignore[unknown-argument]
 
 
 class TestMinnesotaPriorCrossLagScaling:
@@ -70,8 +70,16 @@ class TestMinnesotaPriorCrossLagScaling:
         """Own-lag entries (i == j) carry ratio sigma_i/sigma_i == 1."""
         prior = MinnesotaPrior()
         n_vars, n_lags = 3, 3
-        baseline = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=np.ones(n_vars))["B_sigma"]
-        heterogeneous = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=np.array([1.0, 4.0, 9.0]))["B_sigma"]
+        baseline = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=np.ones(n_vars),  # ty: ignore[unknown-argument]
+        )["B_sigma"]
+        heterogeneous = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=np.array([1.0, 4.0, 9.0]),  # ty: ignore[unknown-argument]
+        )["B_sigma"]
 
         for i in range(n_vars):
             for lag in range(n_lags):
@@ -84,8 +92,16 @@ class TestMinnesotaPriorCrossLagScaling:
         prior = MinnesotaPrior()
         n_vars, n_lags = 3, 2
         sigma = np.array([2.0, 3.0, 7.0])
-        baseline = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=np.ones(n_vars))["B_sigma"]
-        scaled = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)["B_sigma"]
+        baseline = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=np.ones(n_vars),  # ty: ignore[unknown-argument]
+        )["B_sigma"]
+        scaled = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=sigma,  # ty: ignore[unknown-argument]
+        )["B_sigma"]
 
         for i in range(n_vars):
             for lag in range(n_lags):
@@ -101,8 +117,16 @@ class TestMinnesotaPriorCrossLagScaling:
         n_vars, n_lags = 2, 4
         sigma = np.array([1.5, 6.0])
 
-        old_style = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=np.ones(n_vars))["B_sigma"]
-        new_style = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)["B_sigma"]
+        old_style = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=np.ones(n_vars),  # ty: ignore[unknown-argument]
+        )["B_sigma"]
+        new_style = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=sigma,  # ty: ignore[unknown-argument]
+        )["B_sigma"]
 
         ratio = sigma[:, None] / sigma[None, :]  # ratio[i, j] = sigma_i/sigma_j
         col_var = np.arange(n_vars * n_lags) % n_vars
@@ -125,11 +149,15 @@ class TestMinnesotaPriorCrossLagScaling:
         sigma = np.array([2.0, 3.0, 7.0])
         c = 4.0
 
-        base = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)["B_sigma"]
+        base = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)["B_sigma"]  # ty: ignore[unknown-argument]
 
         sigma_j_rescaled = sigma.copy()
         sigma_j_rescaled[1] *= c  # rescale variable j=1
-        rescaled = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma_j_rescaled)["B_sigma"]
+        rescaled = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=sigma_j_rescaled,  # ty: ignore[unknown-argument]
+        )["B_sigma"]
 
         # Coefficient (i=0, j=1): prior sd shrinks by 1/c.
         assert rescaled[0, 1] == pytest.approx(base[0, 1] / c)
@@ -144,11 +172,15 @@ class TestMinnesotaPriorCrossLagScaling:
         sigma = np.array([2.0, 3.0, 7.0])
         c = 4.0
 
-        base = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)["B_sigma"]
+        base = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma)["B_sigma"]  # ty: ignore[unknown-argument]
 
         sigma_i_rescaled = sigma.copy()
         sigma_i_rescaled[0] *= c  # rescale equation variable i=0
-        rescaled = prior.build_priors(n_vars=n_vars, n_lags=n_lags, sigma=sigma_i_rescaled)["B_sigma"]
+        rescaled = prior.build_priors(
+            n_vars=n_vars,
+            n_lags=n_lags,
+            sigma=sigma_i_rescaled,  # ty: ignore[unknown-argument]
+        )["B_sigma"]
 
         assert rescaled[0, 1] == pytest.approx(base[0, 1] * c)
         assert rescaled[0, 2] == pytest.approx(base[0, 2] * c)
