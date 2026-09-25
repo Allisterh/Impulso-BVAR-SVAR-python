@@ -37,17 +37,23 @@ _CONST_PRIOR_VAR: float = 10e6
 
 
 def ar1_residual_sd(y: np.ndarray) -> np.ndarray:
-    """Per-variable residual standard deviation of a univariate AR(1) fit.
+    """Per-variable residual standard deviation of a univariate AR(1)-with-constant fit.
 
-    This is the ``sigma`` scale consumed by :func:`minnesota_dummies`: each series is
-    regressed on a constant and its own first lag, and the (unbiased) residual
-    standard deviation is returned.
+    For each column of `y` independently, fits `y[t] = c + phi * y[t-1] + e[t]` by
+    ordinary least squares over the `T - 1` observations `t = 1, ..., T - 1`, then
+    returns the residual standard deviation `sqrt(sum(e**2) / dof)` with
+    `dof = max(T - 1 - 2, 1)` — the `T - 1` fitted observations less the 2 estimated
+    parameters (intercept and own-lag coefficient), floored at 1 so the computation
+    stays well-defined for very short series. This is the `sigma` scale consumed by
+    `minnesota_dummies`, and the scale in which Impulso's other data-dependent priors
+    (e.g. `VAR.exog_prior_scale`) are defined; see
+    docs/adr/0012-exog-prior-scales-with-data.md.
 
     Args:
-        y: Data array of shape ``(T, n)``.
+        y: Data array of shape `(T, n)` — `T` observations of `n` variables, `T >= 2`.
 
     Returns:
-        Array of shape ``(n,)`` with the AR(1) residual standard deviation of each
+        Array of shape `(n,)` with the AR(1) residual standard deviation of each
         column.
     """
     y = np.asarray(y, dtype=float)

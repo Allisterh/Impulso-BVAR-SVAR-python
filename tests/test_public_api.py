@@ -218,6 +218,21 @@ class TestErrorDistributionPublicAPI:
         assert {"Gaussian", "StudentT", "ErrorDistribution"} <= set(impulso.__all__)
 
 
+class TestAr1ResidualSdPublicAPI:
+    """`ar1_residual_sd` is importable from the public namespace (issue 03)."""
+
+    def test_ar1_residual_sd_importable_from_impulso(self):
+        from impulso import ar1_residual_sd
+        from impulso._conjugate import ar1_residual_sd as direct
+
+        assert ar1_residual_sd is direct
+
+    def test_ar1_residual_sd_in_all(self):
+        import impulso
+
+        assert "ar1_residual_sd" in impulso.__all__
+
+
 class TestIdentificationPublicAPI:
     def test_long_run_restriction_importable_from_impulso(self):
         from impulso import LongRunRestriction
