@@ -54,6 +54,18 @@ def _model_logp(model, seed: int = 0) -> float:
     return float(model.compile_logp()(point))
 
 
+def _pinned_intercept_prior_logp(full_model, point, pinned: list[int]) -> float:
+    """Prior log-density of the `pinned` elements of `full_model`'s intercept at `point`.
+
+    A model that excludes an equation's intercept has no prior term for it,
+    whereas the equivalent full model with that intercept pinned to `0.0`
+    still carries the prior density of `0.0`. Subtracting this makes the
+    two joint log-probabilities comparable.
+    """
+    (elementwise,) = full_model.compile_logp(vars=[full_model["intercept"]], sum=False)(point)
+    return float(np.sum(np.asarray(elementwise)[pinned]))
+
+
 class TestWrapperLogpParity:
     """Pins `_build_pymc_model`'s numeric output across the 08a refactor.
 
@@ -540,7 +552,10 @@ class TestInterceptEquations:
         """Building with only `y1` intercepted must give the same
         log-probability as building with both intercepted and `y2`'s pinned
         to exactly `0.0` — i.e. the excluded equation's `mu` really does add
-        a literal zero rather than just omitting the term some other way."""
+        a literal zero rather than just omitting the term some other way.
+        The full model's joint log-probability also carries `y2`'s intercept
+        prior density at `0.0`, which the partial model has no term for, so
+        that is subtracted before comparing."""
         import pymc as pm
 
         data = _make_data(rng)  # y1, y2
@@ -568,7 +583,8 @@ class TestInterceptEquations:
 
         partial_logp = float(partial_model.compile_logp()(partial_point))
         full_logp = float(full_model.compile_logp()(full_point))
-        assert partial_logp == pytest.approx(full_logp)
+        pinned_prior = _pinned_intercept_prior_logp(full_model, full_point, pinned=[1])
+        assert partial_logp == pytest.approx(full_logp - pinned_prior)
 
     @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_excluded_equation_with_exog_gets_a_literal_zero(self, rng):
@@ -603,7 +619,8 @@ class TestInterceptEquations:
 
         partial_logp = float(partial_model.compile_logp()(partial_point))
         full_logp = float(full_model.compile_logp()(full_point))
-        assert partial_logp == pytest.approx(full_logp)
+        pinned_prior = _pinned_intercept_prior_logp(full_model, full_point, pinned=[1])
+        assert partial_logp == pytest.approx(full_logp - pinned_prior)
 
     @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_all_excluded_gives_none_intercept_and_no_coord(self, rng):
@@ -630,7 +647,8 @@ class TestInterceptEquations:
     @pytest.mark.xfail(strict=True, reason="issue 08b")
     def test_all_excluded_matches_full_model_with_intercept_pinned_to_zero(self, rng):
         """No free intercept at all must give the same log-probability as
-        the default build with every intercept pinned to `0.0`."""
+        the default build with every intercept pinned to `0.0`, once that
+        build's intercept prior density at `0.0` is subtracted."""
         import pymc as pm
 
         data = _make_data(rng)
@@ -658,7 +676,8 @@ class TestInterceptEquations:
 
         excluded_logp = float(excluded_model.compile_logp()(excluded_point))
         full_logp = float(full_model.compile_logp()(full_point))
-        assert excluded_logp == pytest.approx(full_logp)
+        pinned_prior = _pinned_intercept_prior_logp(full_model, full_point, pinned=[0, 1])
+        assert excluded_logp == pytest.approx(full_logp - pinned_prior)
 
     def test_default_none_matches_current_wrapper_logp(self, rng):
         """Acceptance criterion 1: omitting `intercept_equations` gives the
