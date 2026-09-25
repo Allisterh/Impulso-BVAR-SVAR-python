@@ -578,19 +578,32 @@ class TestBuildPymcModelRejectsDegenerateSigma:
     """
 
     @pytest.mark.xfail(strict=True, reason="issue 07b: sigma is not yet validated in _build_pymc_model")
-    def test_rejects_a_column_with_exactly_zero_ar1_residual_sd(self):
-        # 3 rows makes the AR(1) fit (intercept + own lag = 2 parameters against 2
-        # data points) exactly determined, so its residual is exactly zero -- for
-        # y2 here, bit-for-bit, despite y2 not being constant (values 5, 3, -7).
-        endog = np.array([[0.0, 5.0], [1.0, 3.0], [2.0, -7.0]])
-        sigma = ar1_residual_sd(endog)
-        assert sigma[1] == 0.0, "fixture no longer exercises an exact-zero sigma"
+    def test_rejects_a_column_with_exactly_zero_ar1_residual_sd(self, rng, monkeypatch):
+        """A column need not be literally constant to trigger this guard: any
+        column `ar1_residual_sd` happens to report a zero (or non-finite) scale
+        for is caught, whatever produced that scale.
+
+        `ar1_residual_sd` is forced to return an exact zero here rather than
+        relying on a short/noiseless sample landing on exact-zero round-off
+        naturally: `np.linalg.lstsq`'s residual for such a sample is only
+        *machine-epsilon-small*, and how small depends on the BLAS/LAPACK
+        backend, so it is not bit-exact `0.0` on every platform or numpy
+        version (observed as low as ~6e-15, not 0.0, on some CI jobs). Forcing
+        the value keeps the test deterministic while still exercising the real
+        `_build_pymc_model` guard path against the real (varying, non-constant)
+        `endog` data.
+        """
+        import impulso._conjugate as conjugate
+
+        endog = rng.standard_normal((150, 2))  # ordinary, genuinely varying data
         data = VARData(
             endog=endog,
             endog_names=["y1", "y2"],
-            index=pd.date_range("2000-01-01", periods=3, freq="QS"),
+            index=pd.date_range("2000-01-01", periods=150, freq="QS"),
         )
         spec = VAR(lags=1)
+
+        monkeypatch.setattr(conjugate, "ar1_residual_sd", lambda y: np.array([1.0, 0.0]))
 
         with pytest.raises(ValueError, match=r"'y2'"):
             spec._build_pymc_model(data)
