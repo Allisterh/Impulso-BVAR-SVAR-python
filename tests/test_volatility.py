@@ -310,7 +310,7 @@ class TestInnovationScalePrior:
     @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
     @pytest.mark.parametrize("family", ["halfnormal", "exponential", "halfcauchy"])
     def test_construction_each_family(self, family):
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         prior = InnovationScalePrior(family=family, scale=1.0)
         assert prior.family == family
@@ -321,7 +321,7 @@ class TestInnovationScalePrior:
     def test_non_positive_scale_raises(self, bad_scale):
         from pydantic import ValidationError
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         with pytest.raises(ValidationError):
             InnovationScalePrior(family="halfnormal", scale=bad_scale)
@@ -330,7 +330,7 @@ class TestInnovationScalePrior:
     def test_unknown_family_raises(self):
         from pydantic import ValidationError
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         with pytest.raises(ValidationError):
             InnovationScalePrior(family="lognormal", scale=1.0)
@@ -339,7 +339,7 @@ class TestInnovationScalePrior:
     def test_is_frozen(self):
         from pydantic import ValidationError
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         prior = InnovationScalePrior(family="halfnormal", scale=1.0)
         with pytest.raises(ValidationError):
@@ -347,7 +347,7 @@ class TestInnovationScalePrior:
 
     @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior does not exist yet")
     def test_model_dump_round_trip(self):
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         prior = InnovationScalePrior(family="exponential", scale=0.4)
         assert InnovationScalePrior.model_validate(prior.model_dump()) == prior
@@ -362,25 +362,27 @@ class TestConstantInnovationScalePriorsField:
 
     @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_accepts_tuple_of_innovation_scale_priors(self):
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         priors = (
             InnovationScalePrior(family="halfnormal", scale=0.1),
             InnovationScalePrior(family="halfcauchy", scale=2.5),
         )
-        adapter = Constant(innovation_scale_priors=priors)
+        adapter = Constant(innovation_scale_priors=priors)  # ty: ignore[pydantic-discarded-extra-argument]
         assert adapter.innovation_scale_priors == priors
 
     @pytest.mark.xfail(strict=True, reason="issue 06: Constant.innovation_scale_priors does not exist yet")
     def test_round_trips_with_other_fields(self):
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         priors = (
             InnovationScalePrior(family="halfnormal", scale=0.1),
             InnovationScalePrior(family="exponential", scale=0.4),
             InnovationScalePrior(family="halfcauchy", scale=3.0),
         )
-        adapter = Constant(sigma_sd_beta=1.5, tril_offdiag_sigma=0.25, innovation_scale_priors=priors)
+        adapter = Constant(  # ty: ignore[pydantic-discarded-extra-argument]
+            sigma_sd_beta=1.5, tril_offdiag_sigma=0.25, innovation_scale_priors=priors
+        )
         restored = Constant.model_validate(adapter.model_dump())
         assert restored == adapter
         assert restored.innovation_scale_priors == priors
@@ -408,11 +410,11 @@ class TestConstantInnovationScalePriorsBuild:
     def test_mismatched_length_raises_at_build_time_not_construction(self):
         import pymc as pm
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         # Constant does not know n_vars at construction, so this must not raise.
         priors = (InnovationScalePrior(family="halfnormal", scale=0.1),)
-        adapter = Constant(innovation_scale_priors=priors)
+        adapter = Constant(innovation_scale_priors=priors)  # ty: ignore[pydantic-discarded-extra-argument]
 
         with pytest.raises(ValueError, match="innovation_scale_priors"), pm.Model():
             adapter.build_pymc_latent(n_vars=3, T=10)
@@ -421,14 +423,14 @@ class TestConstantInnovationScalePriorsBuild:
     def test_mixed_families_register_one_named_rv_per_variable(self):
         import pymc as pm
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         priors = (
             InnovationScalePrior(family="halfnormal", scale=0.2),
             InnovationScalePrior(family="halfcauchy", scale=2.5),
             InnovationScalePrior(family="exponential", scale=0.4),
         )
-        adapter = Constant(innovation_scale_priors=priors)
+        adapter = Constant(innovation_scale_priors=priors)  # ty: ignore[pydantic-discarded-extra-argument]
         with pm.Model() as model:
             L_tensor = adapter.build_pymc_latent(n_vars=3, T=10)
 
@@ -444,9 +446,11 @@ class TestConstantInnovationScalePriorsBuild:
     def test_n_vars_1_skips_tril_offdiag(self):
         import pymc as pm
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
-        adapter = Constant(innovation_scale_priors=(InnovationScalePrior(family="halfnormal", scale=0.3),))
+        adapter = Constant(  # ty: ignore[pydantic-discarded-extra-argument]
+            innovation_scale_priors=(InnovationScalePrior(family="halfnormal", scale=0.3),)
+        )
         with pm.Model() as model:
             adapter.build_pymc_latent(n_vars=1, T=10)
 
@@ -459,13 +463,13 @@ class TestConstantInnovationScalePriorsBuild:
         """Off-diagonal construction (`tril_offdiag` scaled by `sd[i]`) is unchanged."""
         import pymc as pm
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         priors = (
             InnovationScalePrior(family="halfnormal", scale=0.3),
             InnovationScalePrior(family="halfcauchy", scale=1.0),
         )
-        adapter = Constant(innovation_scale_priors=priors)
+        adapter = Constant(innovation_scale_priors=priors)  # ty: ignore[pydantic-discarded-extra-argument]
         with pm.Model() as model:
             L_tensor = adapter.build_pymc_latent(n_vars=2, T=10)
             L_value, sd0, sd1 = pm.draw([L_tensor, model["sigma_sd_0"], model["sigma_sd_1"]], random_seed=42)
@@ -495,7 +499,7 @@ class TestConstantInnovationScalePriorsBuild:
         import pymc as pm
         from scipy import stats
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         reference = {
             "halfnormal": stats.halfnorm(scale=scale),
@@ -503,7 +507,9 @@ class TestConstantInnovationScalePriorsBuild:
             "halfcauchy": stats.halfcauchy(scale=scale),
         }[family]
 
-        adapter = Constant(innovation_scale_priors=(InnovationScalePrior(family=family, scale=scale),))
+        adapter = Constant(  # ty: ignore[pydantic-discarded-extra-argument]
+            innovation_scale_priors=(InnovationScalePrior(family=family, scale=scale),)
+        )
         with pm.Model() as model:
             adapter.build_pymc_latent(n_vars=1, T=10)
 
@@ -517,14 +523,14 @@ class TestConstantInnovationScalePriorsBuild:
         import pymc as pm
         from scipy import stats
 
-        from impulso.volatility import InnovationScalePrior
+        from impulso.volatility import InnovationScalePrior  # ty: ignore[unresolved-import]
 
         priors = (
             InnovationScalePrior(family="halfnormal", scale=0.2),
             InnovationScalePrior(family="exponential", scale=0.4),
             InnovationScalePrior(family="halfcauchy", scale=2.5),
         )
-        adapter = Constant(innovation_scale_priors=priors)
+        adapter = Constant(innovation_scale_priors=priors)  # ty: ignore[pydantic-discarded-extra-argument]
         with pm.Model() as model:
             adapter.build_pymc_latent(n_vars=3, T=10)
 

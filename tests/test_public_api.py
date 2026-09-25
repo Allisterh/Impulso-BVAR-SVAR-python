@@ -175,7 +175,9 @@ class TestVolatilityPublicAPI:
     @pytest.mark.xfail(strict=True, reason="issue 06: InnovationScalePrior not yet public")
     def test_innovation_scale_prior_importable_from_impulso(self):
         from impulso import InnovationScalePrior
-        from impulso.volatility import InnovationScalePrior as DirectInnovationScalePrior
+        from impulso.volatility import (
+            InnovationScalePrior as DirectInnovationScalePrior,  # ty: ignore[unresolved-import]
+        )
 
         assert InnovationScalePrior is DirectInnovationScalePrior
 
