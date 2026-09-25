@@ -470,7 +470,7 @@ class TestInterceptEquations:
                 exog=None,
                 n_lags=1,
                 endog_names=data.endog_names,
-                intercept_equations=["y1", "bogus"],
+                intercept_equations=["y1", "bogus"],  # ty: ignore[unknown-argument]
             )
 
     @pytest.mark.xfail(strict=True, reason="issue 08b")
@@ -486,7 +486,7 @@ class TestInterceptEquations:
                 exog=None,
                 n_lags=1,
                 endog_names=data.endog_names,
-                intercept_equations=["y1", "y1"],
+                intercept_equations=["y1", "y1"],  # ty: ignore[unknown-argument]
             )
 
     @pytest.mark.xfail(strict=True, reason="issue 08b")
@@ -504,7 +504,7 @@ class TestInterceptEquations:
                 exog=None,
                 n_lags=1,
                 endog_names=data.endog_names,
-                intercept_equations=["y3", "y1"],
+                intercept_equations=["y3", "y1"],  # ty: ignore[unknown-argument]
             )
 
         assert "var_intercept" in model.coords
@@ -535,7 +535,7 @@ class TestInterceptEquations:
                 exog=None,
                 n_lags=1,
                 endog_names=data.endog_names,
-                intercept_equations=list(reversed(data.endog_names)),
+                intercept_equations=list(reversed(data.endog_names)),  # ty: ignore[unknown-argument]
             )
 
         assert "var_intercept" not in explicit_model.coords
@@ -567,7 +567,7 @@ class TestInterceptEquations:
                 exog=None,
                 n_lags=1,
                 endog_names=data.endog_names,
-                intercept_equations=["y1"],
+                intercept_equations=["y1"],  # ty: ignore[unknown-argument]
             )
         with pm.Model() as full_model:
             spec.build_in_model(
@@ -602,7 +602,7 @@ class TestInterceptEquations:
                 n_lags=1,
                 endog_names=data.endog_names,
                 exog_names=data.exog_names,
-                intercept_equations=["y1"],
+                intercept_equations=["y1"],  # ty: ignore[unknown-argument]
             )
         with pm.Model() as full_model:
             spec.build_in_model(
@@ -637,7 +637,7 @@ class TestInterceptEquations:
                 exog=None,
                 n_lags=1,
                 endog_names=data.endog_names,
-                intercept_equations=[],
+                intercept_equations=[],  # ty: ignore[unknown-argument]
             )
 
         assert handles.intercept is None
@@ -660,7 +660,7 @@ class TestInterceptEquations:
                 exog=None,
                 n_lags=1,
                 endog_names=data.endog_names,
-                intercept_equations=[],
+                intercept_equations=[],  # ty: ignore[unknown-argument]
             )
         with pm.Model() as full_model:
             spec.build_in_model(
