@@ -118,7 +118,7 @@ class TestPyMCModelBuild:
         prior_params = spec.resolved_prior.build_priors(
             n_vars=2,
             n_lags=1,
-            sigma=np.ones(2),  # ty: ignore[unknown-argument]
+            sigma=np.ones(2),
         )
         volatility = spec.resolved_volatility
 
@@ -527,7 +527,7 @@ class TestMinnesotaPriorSigmaWiredIntoModel:
         expected = MinnesotaPrior().build_priors(
             n_vars=3,
             n_lags=2,
-            sigma=sigma,  # ty: ignore[unknown-argument]
+            sigma=sigma,
         )["B_sigma"]
         np.testing.assert_allclose(got, expected)
         # The scaling is doing real work: heterogeneous sigma must not match
@@ -535,7 +535,7 @@ class TestMinnesotaPriorSigmaWiredIntoModel:
         baseline = MinnesotaPrior().build_priors(
             n_vars=3,
             n_lags=2,
-            sigma=np.ones(3),  # ty: ignore[unknown-argument]
+            sigma=np.ones(3),
         )["B_sigma"]
         assert not np.allclose(got, baseline)
 
