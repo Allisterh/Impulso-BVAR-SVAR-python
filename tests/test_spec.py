@@ -546,7 +546,7 @@ class TestValidateSigmaIsUsable:
     """
 
     def test_rejects_zero_entry_and_names_the_column(self):
-        from impulso.spec import _validate_sigma_is_usable  # ty: ignore[unresolved-import]
+        from impulso.spec import _validate_sigma_is_usable
 
         sigma = np.array([1.0, 0.0, 2.0])
         with pytest.raises(ValueError, match=r"'y2'"):
@@ -554,14 +554,14 @@ class TestValidateSigmaIsUsable:
 
     @pytest.mark.parametrize("bad_value", [0.0, -1.0, np.nan, np.inf])
     def test_rejects_non_positive_or_non_finite(self, bad_value):
-        from impulso.spec import _validate_sigma_is_usable  # ty: ignore[unresolved-import]
+        from impulso.spec import _validate_sigma_is_usable
 
         sigma = np.array([1.0, bad_value])
         with pytest.raises(ValueError, match="zero, negative, or non-finite"):
             _validate_sigma_is_usable(sigma, ["y1", "y2"])
 
     def test_accepts_all_positive_finite(self):
-        from impulso.spec import _validate_sigma_is_usable  # ty: ignore[unresolved-import]
+        from impulso.spec import _validate_sigma_is_usable
 
         _validate_sigma_is_usable(np.array([1.0, 1e-10, 5.0]), ["y1", "y2", "y3"])  # must not raise
 
