@@ -22,6 +22,7 @@ from impulso.data import VARData
 from impulso.evidence import ModelEvidence
 from impulso.observation import Gaussian
 from impulso.protocols import ErrorDistribution, IdentificationScheme, VolatilityProcess
+from impulso.volatility import Constant
 
 if TYPE_CHECKING:
     from impulso.identified import IdentifiedVAR
@@ -84,6 +85,85 @@ class FittedVAR(ImpulsoBaseModel):
     error_dist: ErrorDistribution = Field(default_factory=Gaussian)  # ty: ignore[invalid-assignment]
     pymc_model: Any = Field(default=None, repr=False)
     evidence: ModelEvidence | None = Field(default=None, repr=False)
+
+    @classmethod
+    def from_posterior(
+        cls,
+        idata: InferenceDataLike,
+        data: VARData,
+        n_lags: int,
+        *,
+        volatility: VolatilityProcess | None = None,
+        error_dist: ErrorDistribution | None = None,
+        pymc_model: Any = None,
+        evidence: ModelEvidence | None = None,
+    ) -> "FittedVAR":
+        """Wrap a posterior estimated elsewhere into a validated `FittedVAR`.
+
+        The public, validated alternative to `FittedVAR.model_construct`,
+        which trusts its arguments blindly. This validates the posterior's
+        `posterior` group against the schema `VAR.fit` and `ConjugateVAR.fit`
+        both produce — see `impulso._posterior_validation` — before
+        constructing. Both estimators construct their result through this
+        method (issue 04b), so a posterior that breaks the schema now raises
+        here instead of silently producing a malformed `FittedVAR`.
+
+        Args:
+            idata: InferenceData-schema container with a `posterior` group.
+                Stored on the returned `FittedVAR` whole, including any
+                `sample_stats` or other groups the caller's posterior
+                carries, so diagnostics survive the wrap — only the
+                `posterior` group is inspected for validation.
+            data: The `VARData` the posterior is claimed to have been fitted
+                on. `var_names` is taken from `data.endog_names`.
+            n_lags: Lag order the posterior's coefficient layout is checked
+                against.
+            volatility: Volatility process responsible for the posterior's
+                volatility-seam variables (`L` for `Constant` / a
+                `ConjugateVolatility` break; `h` and `R_chol` for
+                `StochasticVolatility`). Defaults to `Constant()`, matching
+                what `VAR.fit` and `ConjugateVAR.fit` both fall back to.
+            error_dist: Observation error distribution. Defaults to
+                `Gaussian()`, `FittedVAR`'s own default. When heavy-tailed
+                (`error_dist.is_heavy_tailed`), the posterior must carry a
+                `nu` variable.
+            pymc_model: The `pymc.Model` built during estimation, if any.
+                Passed straight through; not validated.
+            evidence: Closed-form model evidence, if any. Passed straight
+                through; not validated.
+
+        Returns:
+            A validated `FittedVAR`.
+
+        Raises:
+            ValueError: If the posterior is missing a required variable, has
+                the wrong dims, the wrong size along a dim, or — when the
+                posterior carries explicit string labels — lag-major or
+                variable-name labels that disagree with the layout `VAR.fit`
+                and `ConjugateVAR.fit` both produce. The message names the
+                offending variable and the expected layout.
+            TypeError: If `volatility` is not a `Constant`, `ConjugateVolatility`,
+                or `StochasticVolatility` instance — schema validation does not
+                know which posterior variables to expect from anything else.
+        """
+        from impulso._posterior_validation import validate_posterior_schema
+
+        resolved_volatility = volatility if volatility is not None else Constant()
+        resolved_error_dist = error_dist if error_dist is not None else Gaussian()
+
+        posterior = posterior_dataset(idata)
+        validate_posterior_schema(posterior, data, n_lags, resolved_volatility, resolved_error_dist)
+
+        return cls.model_construct(
+            idata=idata,
+            n_lags=n_lags,
+            data=data,
+            var_names=data.endog_names,
+            volatility=resolved_volatility,
+            error_dist=resolved_error_dist,
+            pymc_model=pymc_model,
+            evidence=evidence,
+        )
 
     def _posterior(self) -> xr.Dataset:
         """The `posterior` group as an `xarray.Dataset`; see `impulso._posterior.posterior_dataset`.

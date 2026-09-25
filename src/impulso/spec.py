@@ -221,11 +221,10 @@ class VAR(ImpulsoBaseModel):
         # Sample
         idata = sampler.sample(model)
 
-        return FittedVAR.model_construct(
-            idata=idata,
-            n_lags=n_lags,
-            data=data,
-            var_names=data.endog_names,
+        return FittedVAR.from_posterior(
+            idata,
+            data,
+            n_lags,
             volatility=self.resolved_volatility,
             error_dist=self.resolved_error_dist,
             pymc_model=model,

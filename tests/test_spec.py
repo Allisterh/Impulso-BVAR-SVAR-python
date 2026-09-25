@@ -693,6 +693,33 @@ class TestErrorDistThreadsToFittedVAR:
         assert isinstance(fitted.error_dist, Gaussian)
 
 
+class TestVarFitValidatesPosteriorSchema:
+    """VAR.fit constructs its result through `FittedVAR.from_posterior`
+    (issue 04b), so a sampler whose posterior breaks the shared schema must
+    surface `from_posterior`'s `ValueError` rather than silently producing a
+    malformed `FittedVAR`."""
+
+    def test_posterior_missing_volatility_seam_raises(self, var_data_2v):
+        """A sampler posterior missing `L` (the volatility seam) must raise,
+        not silently return a `FittedVAR` that breaks on first use."""
+        import xarray as xr
+
+        class StubSampler:
+            name = "stub"
+
+            def sample(self, model):
+                return make_idata(
+                    posterior=xr.Dataset({
+                        "B": (("chain", "draw", "var", "coeff"), np.zeros((1, 2, 2, 2))),
+                        "intercept": (("chain", "draw", "var"), np.zeros((1, 2, 2))),
+                        # "L" deliberately omitted: malformed volatility seam.
+                    })
+                )
+
+        with pytest.raises(ValueError, match="L"):
+            VAR(lags=1).fit(var_data_2v, sampler=StubSampler())
+
+
 class TestVolatilityShorthandSV:
     def test_sv_string_resolves_to_stochastic_volatility(self):
         from impulso.spec import VAR
