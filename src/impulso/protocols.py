@@ -178,6 +178,46 @@ class ErrorDistribution(Protocol):
         """
         ...
 
+    def logp(
+        self,
+        mu: "pt.TensorVariable",
+        chol: "pt.TensorVariable",
+        value: "pt.TensorVariable | np.ndarray",
+    ) -> "pt.TensorVariable":
+        """Symbolic log-density of `value` under the law `build_likelihood` registers.
+
+        Returns exactly the density `build_likelihood` would register as an
+        observed likelihood — same PyMC distribution, same parameterisation
+        (Student-t keeps the ADR-0007 scale-matrix convention) — but as a
+        free-standing scalar tensor summed over the leading (time) axis,
+        rather than a registered observed random variable.
+
+        Must be called inside an active PyMC model context. Adapters that
+        register auxiliary variables in `build_likelihood` (`StudentT`
+        registers `nu_excess`/`nu` when `nu="infer"`) register the same
+        names with the same priors here, so a model built entirely from
+        `logp` carries an identical posterior to one built from
+        `build_likelihood`.
+
+        This is what lets a later stage add the VAR likelihood as a
+        `pm.Potential` when the endogenous block is a latent tensor rather
+        than observed data: `value` is then a symbolic PyTensor variable
+        instead of a NumPy array, and this method is called in place of
+        `build_likelihood`, not alongside it, so no variable is registered
+        twice.
+
+        Args:
+            mu: Conditional mean tensor of shape `(T, n_vars)`.
+            chol: Lower-triangular Cholesky factor of the scale matrix Ω,
+                shape `(n_vars, n_vars)` or `(T, n_vars, n_vars)`.
+            value: Endogenous matrix, observed or a symbolic latent, shape
+                `(T, n_vars)`.
+
+        Returns:
+            Scalar symbolic log-density, summed over time.
+        """
+        ...
+
     def draw_standardised_innovations(
         self,
         shape: tuple[int, ...],
