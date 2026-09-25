@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from impulso.sv.fitted import FittedSV
     from impulso.sv.priors import SVDefaultPrior
     from impulso.sv.spec import StochasticVolatility
-    from impulso.volatility import Constant
+    from impulso.volatility import Constant, InnovationScalePrior
 
 __all__ = [
     "VAR",
@@ -72,6 +72,7 @@ __all__ = [
     "HistoricalDecompositionResult",
     "IRFResult",
     "IdentifiedVAR",
+    "InnovationScalePrior",
     "IntegrationOrderResult",
     "LagOrderResult",
     "LongRunRestriction",
@@ -149,6 +150,7 @@ _LAZY_IMPORTS: dict[str, str] = {
     "VolatilityResult": "impulso.results",
     "SVForecastResult": "impulso.results",
     "Constant": "impulso.volatility",
+    "InnovationScalePrior": "impulso.volatility",
     "Gaussian": "impulso.observation",
     "StudentT": "impulso.observation",
     "ErrorDistribution": "impulso.protocols",

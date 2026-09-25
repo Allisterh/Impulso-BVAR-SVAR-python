@@ -170,6 +170,19 @@ class TestVolatilityPublicAPI:
         assert "Constant" in impulso.__all__
         assert "VolatilityProcess" in impulso.__all__
 
+    def test_innovation_scale_prior_importable_from_impulso(self):
+        from impulso import InnovationScalePrior
+        from impulso.volatility import (
+            InnovationScalePrior as DirectInnovationScalePrior,
+        )
+
+        assert InnovationScalePrior is DirectInnovationScalePrior
+
+    def test_innovation_scale_prior_in_all(self):
+        import impulso
+
+        assert "InnovationScalePrior" in impulso.__all__
+
 
 class TestEvidencePublicAPI:
     def test_model_evidence_importable_from_impulso(self):
