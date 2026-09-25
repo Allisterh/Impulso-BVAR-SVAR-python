@@ -49,7 +49,7 @@ def _reference_design(
 @pytest.mark.parametrize("n_lags", LAG_ORDERS)
 @pytest.mark.parametrize("with_exog", [False, True])
 def test_numpy_stacking_matches_reference(rng, n_lags, with_exog):
-    from impulso._design import build_lag_design_matrix
+    from impulso._design import build_lag_design_matrix  # ty: ignore[unresolved-import]
 
     endog = rng.standard_normal((30, 3))
     exog = rng.standard_normal((30, 2)) if with_exog else None
@@ -70,7 +70,7 @@ def test_numpy_stacking_matches_reference(rng, n_lags, with_exog):
 def test_symbolic_path_matches_numpy(rng, n_lags):
     """A symbolic 2-D input takes the `pytensor.tensor.concatenate` branch."""
     import pytensor.tensor as pt
-    from impulso._design import build_lag_design_matrix
+    from impulso._design import build_lag_design_matrix  # ty: ignore[unresolved-import]
 
     endog = rng.standard_normal((30, 3))
     y_np, x_lag_np, _ = build_lag_design_matrix(endog, n_lags)
@@ -84,7 +84,7 @@ def test_symbolic_path_matches_numpy(rng, n_lags):
 
 
 def test_rejects_non_positive_n_lags(rng):
-    from impulso._design import build_lag_design_matrix
+    from impulso._design import build_lag_design_matrix  # ty: ignore[unresolved-import]
 
     endog = rng.standard_normal((10, 2))
     with pytest.raises(ValueError, match="n_lags must be positive"):
