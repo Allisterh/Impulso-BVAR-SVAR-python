@@ -399,11 +399,47 @@ class TestBuildInModel:
         default_sigma = handles_default.B_exog.owner.op.dist_params(handles_default.B_exog.owner)[1].eval()
         custom_sigma = handles_custom.B_exog.owner.op.dist_params(handles_custom.B_exog.owner)[1].eval()
 
-        expected_custom = _exog_prior_sigma(
-            data.endog,
-            data.exog[1:],
-            spec.exog_prior_scale,
-            sigma=custom_scales,  # ty: ignore[unknown-argument]
-        )
+        expected_custom = _exog_prior_sigma(custom_scales, data.exog[1:], spec.exog_prior_scale)
         np.testing.assert_allclose(custom_sigma, expected_custom)
         assert not np.allclose(default_sigma, custom_sigma)
+
+    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
+    def test_endog_scales_feeds_the_minnesota_cross_lag_prior(self, rng):
+        """`endog_scales` is the same sigma `Prior.build_priors` scales the
+        Minnesota cross-lag entries by (docs/adr/0015), not only the exog prior."""
+        import pymc as pm
+
+        data = _make_data(rng)
+        spec = VAR(lags=1)
+        custom_scales = np.array([2.5, 7.0])
+
+        with pm.Model():
+            handles = spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                endog_scales=custom_scales,
+            )
+
+        got = handles.B.owner.op.dist_params(handles.B.owner)[1].eval()
+        expected = spec.resolved_prior.build_priors(n_vars=2, n_lags=1, sigma=custom_scales)["B_sigma"]
+        np.testing.assert_allclose(got, expected)
+
+    @pytest.mark.xfail(strict=True, reason="issue 08a: VAR.build_in_model does not exist yet")
+    def test_endog_scales_are_validated(self, rng):
+        """A caller-supplied scale gets the same zero/non-finite guard as the
+        data-derived one (issue 07b), naming the offending column."""
+        import pymc as pm
+
+        data = _make_data(rng)
+        spec = VAR(lags=1)
+
+        with pm.Model(), pytest.raises(ValueError, match="y2"):
+            spec.build_in_model(
+                endog=data.endog,
+                exog=None,
+                n_lags=1,
+                endog_names=data.endog_names,
+                endog_scales=np.array([1.0, 0.0]),
+            )
