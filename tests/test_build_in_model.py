@@ -1362,7 +1362,6 @@ class TestLatentSeries:
 
         nutpie.compile_pymc_model(model)
 
-    @_LATENT_XFAIL
     def test_duplicate_latent_names_raise(self, rng):
         import pymc as pm
 
@@ -1373,7 +1372,6 @@ class TestLatentSeries:
         with pm.Model(), pytest.raises(ValueError, match="more than once"):
             VAR(lags=2).build_in_model(**kwargs)
 
-    @_LATENT_XFAIL
     def test_every_name_latent_raises(self, rng):
         import pymc as pm
 
@@ -1384,7 +1382,6 @@ class TestLatentSeries:
         with pm.Model(), pytest.raises(ValueError, match="at least one observed series"):
             VAR(lags=2).build_in_model(**kwargs)
 
-    @_LATENT_XFAIL
     @pytest.mark.parametrize(
         ("latent_init_sigma", "match"), [([1.0, 2.0], "entries"), (0.0, "positive"), (-1.0, "positive")]
     )
@@ -1392,9 +1389,8 @@ class TestLatentSeries:
         import pymc as pm
 
         with pm.Model(), pytest.raises(ValueError, match=match):
-            VAR(lags=2).build_in_model(**_latent_setup(rng), latent_init_sigma=latent_init_sigma)  # ty: ignore[unknown-argument]
+            VAR(lags=2).build_in_model(**_latent_setup(rng), latent_init_sigma=latent_init_sigma)
 
-    @_LATENT_XFAIL
     def test_symbolic_endog_column_count_mismatch_raises(self, rng):
         import pymc as pm
         import pytensor.tensor as pt
@@ -1405,7 +1401,6 @@ class TestLatentSeries:
         with pm.Model(), pytest.raises(ValueError, match="observed"):
             VAR(lags=2).build_in_model(**kwargs)
 
-    @_LATENT_XFAIL
     def test_exog_row_count_mismatch_raises(self, rng):
         import pymc as pm
 
