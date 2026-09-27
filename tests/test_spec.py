@@ -178,7 +178,7 @@ class TestPyMCModelBuild:
 
 
 class TestVarFitWithInnovationScalePriors:
-    """Issue 06: `Constant.innovation_scale_priors` wired through `VAR.fit`."""
+    """`Constant.innovation_scale_priors` wired through `VAR.fit`."""
 
     def test_mismatched_length_raises_before_sampling(self, var_data_2v):
         """A length mismatch must surface as a `ValueError` from model building,
@@ -263,7 +263,7 @@ class TestVarFitWithSV:
 class TestVarPassesResidualsToVolatility:
     """VAR computes OLS residuals once and passes them as `data` to
     volatility.build_pymc_latent — the multivariate SV adapter relies on
-    this to seed per-variable priors (closes #65)."""
+    this to seed per-variable priors."""
 
     def test_var_threads_ols_residuals_through_volatility_adapter(self, var_data_2v):
         import numpy as np
@@ -342,9 +342,9 @@ class TestExogPriorScaleField:
 
 
 class TestExogPriorSigma:
-    """`_exog_prior_sigma` puts the B_exog prior in contribution space (#192).
+    """`_exog_prior_sigma` puts the B_exog prior in contribution space.
 
-    `_exog_prior_sigma` takes the per-variable `sigma` directly (issue 07a) —
+    `_exog_prior_sigma` takes the per-variable `sigma` directly —
     `_build_pymc_model` computes it once via `ar1_residual_sd` and shares it
     with `Prior.build_priors`, so these tests compute it the same way rather
     than passing raw `endog` in.
@@ -508,7 +508,7 @@ class TestExogPriorWiredIntoModel:
         assert "B_exog" not in {v.name for v in model.unobserved_RVs}
 
     def test_fit_rejects_a_dummy_that_only_switches_inside_the_initial_conditions(self, rng):
-        """VARData sees variation; the estimation sample does not (#192)."""
+        """VARData sees variation; the estimation sample does not."""
         endog = rng.standard_normal((150, 2))
         dummy = np.ones((150, 1))
         dummy[:2] = 0.0  # switches at t=2, but lags=4 trims rows 0-3 away
@@ -521,7 +521,7 @@ class TestExogPriorWiredIntoModel:
         self._capture(data, VAR(lags=1))
 
     def test_prior_predictive_graph_carries_the_same_scaled_sigma(self, rng):
-        """The graph `prior_predictive` draws from is the graph `fit` samples (#56, #192).
+        """The graph `prior_predictive` draws from is the graph `fit` samples.
 
         `VAR.prior_predictive` builds its graph through `_build_pymc_model`,
         the same seam `fit` uses. If the scale-adaptive exog prior lived in
@@ -557,7 +557,7 @@ class TestExogPriorWiredIntoModel:
 
 class TestMinnesotaPriorSigmaWiredIntoModel:
     """`VAR._build_pymc_model` passes `ar1_residual_sd(data.endog)` to
-    `MinnesotaPrior.build_priors` (issue 07a): the coefficient prior sampled
+    `MinnesotaPrior.build_priors`: the coefficient prior sampled
     in the real graph must match what `build_priors` returns for that sigma,
     not a unit-scale baseline.
     """
@@ -593,7 +593,7 @@ class TestMinnesotaPriorSigmaWiredIntoModel:
 
 class TestValidateSigmaIsUsable:
     """`_validate_sigma_is_usable` guards the shared `sigma` before it reaches
-    `Prior.build_priors` or `_exog_prior_sigma` (issue 07b).
+    `Prior.build_priors` or `_exog_prior_sigma`.
     """
 
     def test_rejects_zero_entry_and_names_the_column(self):
@@ -618,7 +618,7 @@ class TestValidateSigmaIsUsable:
 
     def test_default_source_keeps_ar1_residual_sd_message(self):
         """No explicit `source` is the data-derived path; its message is
-        unchanged by issue 08c."""
+        unchanged."""
         from impulso.spec import _validate_sigma_is_usable
 
         with pytest.raises(ValueError, match="ar1_residual_sd"):
@@ -626,7 +626,7 @@ class TestValidateSigmaIsUsable:
 
     def test_endog_scales_source_drops_ar1_residual_sd_mention(self):
         """`source="endog_scales"` names the actual source instead of blaming
-        `ar1_residual_sd`, which never ran on this path (issue 08c)."""
+        `ar1_residual_sd`, which never ran on this path."""
         from impulso.spec import _validate_sigma_is_usable
 
         with pytest.raises(ValueError, match=r"endog_scales") as exc_info:
@@ -641,7 +641,7 @@ class TestValidateSigmaIsUsable:
 
 class TestBuildPymcModelRejectsDegenerateSigma:
     """`_build_pymc_model` validates the `sigma` it computes before handing it to
-    the prior or `_exog_prior_sigma` (issue 07b). A column need not be literally
+    the prior or `_exog_prior_sigma`. A column need not be literally
     constant to trigger this: an exactly-determined AR(1) fit (a very short,
     noiseless sample) can also give `sigma == 0` for a column `VARData` accepts
     because it does vary.
@@ -716,7 +716,7 @@ def _capture_model(var_data, **var_kwargs):
 
 
 class TestErrorDistributionParameter:
-    """The `error_dist=` seam on the VAR spec (issue #152)."""
+    """The `error_dist=` seam on the VAR spec."""
 
     def test_default_is_gaussian_string(self):
         assert VAR(lags=2).error_dist == "gaussian"
@@ -753,7 +753,7 @@ class TestErrorDistributionParameter:
 
 
 class TestStudentTRejectedWithStochasticVolatility:
-    """SV x Student-t is rejected at construction, not at fit (issue #152)."""
+    """SV x Student-t is rejected at construction, not at fit."""
 
     def test_string_forms_raise(self):
         with pytest.raises(ValidationError, match="time-varying volatility"):
@@ -848,7 +848,7 @@ class TestStudentTModelBuild:
 
 
 class TestErrorDistThreadsToFittedVAR:
-    """The model_construct threading guard (issue #152, risk 5).
+    """The model_construct threading guard.
 
     Forgetting `error_dist=` in `FittedVAR.model_construct` is a *silent*
     wrong-numbers bug: a t-fitted model would forecast Gaussian tails with
@@ -902,8 +902,8 @@ class TestErrorDistThreadsToFittedVAR:
 
 
 class TestVarFitValidatesPosteriorSchema:
-    """VAR.fit constructs its result through `FittedVAR.from_posterior`
-    (issue 04b), so a sampler whose posterior breaks the shared schema must
+    """VAR.fit constructs its result through `FittedVAR.from_posterior`,
+    so a sampler whose posterior breaks the shared schema must
     surface `from_posterior`'s `ValueError` rather than silently producing a
     malformed `FittedVAR`."""
 
@@ -941,7 +941,7 @@ def _captured_mu(model):
 
 class TestLagStackingParity:
     """Pins the numeric contract of the lag-major design matrix `VAR` bakes
-    into its PyMC graph (issue 02).
+    into its PyMC graph.
 
     Deliberately does not call any private stacking helper: it reconstructs
     `X_lag`/`X_exog` by hand and compares against `mu`, the conditional-mean

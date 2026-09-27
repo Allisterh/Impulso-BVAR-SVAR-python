@@ -146,7 +146,7 @@ def _explicit_string_labels(da: xr.DataArray, dim: str) -> list[str] | None:
     with no entry in `.coords` at all. `VAR.fit` registers every dim through
     `pm.Model(coords=...)`, so its labels are real strings. Only the latter
     is checked — a hand-built posterior is free to leave labels off and be
-    trusted positionally, per the resolved ambiguity in issue 04a.
+    trusted positionally.
     """
     if dim not in da.coords:
         return None

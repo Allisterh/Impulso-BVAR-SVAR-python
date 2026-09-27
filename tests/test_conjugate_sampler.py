@@ -70,12 +70,12 @@ def _sim_var1(seed: int, t_obs: int = 400, scale: np.ndarray | None = None) -> n
 
 
 class TestDesignMatrixParity:
-    """Pins the module's `_design(y, n_lags)` contract (issue 02): a leading
+    """Pins the module's `_design(y, n_lags)` contract: a leading
     constant column, then lag blocks in lag-major order.
 
     The reference here is built with `pandas.DataFrame.shift`, not the
     module's own numpy-slicing formula, so this stays a real regression
-    guard once `_design` delegates its lag stacking to the issue-02 shared
+    guard once `_design` delegates its lag stacking to the shared
     builder rather than a tautology dressed up as a test.
     """
 

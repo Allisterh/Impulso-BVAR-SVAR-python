@@ -1,4 +1,4 @@
-"""Robustness evidence for Student-t observation errors (issue #152).
+"""Robustness evidence for Student-t observation errors.
 
 The fast test is the primary evidence and needs no MCMC: it asserts the
 *mechanism* directly on the compiled PyMC gradient. The t score with

@@ -1,9 +1,9 @@
-"""Tests for `FittedVAR.from_posterior` (issue 04a).
+"""Tests for `FittedVAR.from_posterior`.
 
 `from_posterior` is the public, validated alternative to
 `FittedVAR.model_construct`: it wraps a posterior produced elsewhere,
 checking it against the schema `VAR.fit` and `ConjugateVAR.fit` both
-produce before constructing. Neither estimator calls it yet (issue 04b).
+produce before constructing. Neither estimator calls it yet.
 
 Most tests build a hand-rolled posterior via `_build_posterior` below — no
 MCMC needed, mirroring `conftest.synthetic_idata_2v`. A handful of tests

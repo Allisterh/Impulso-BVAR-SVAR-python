@@ -374,7 +374,7 @@ class TestSignRestrictionNewIdentify:
 
 
 class TestPosteriorCache:
-    """Weakref-validated identity cache shared by the identification schemes (#203)."""
+    """Weakref-validated identity cache shared by the identification schemes."""
 
     def test_xr_dataset_supports_weak_references(self):
         """The whole design rests on this — assert it rather than assume it."""
@@ -723,7 +723,7 @@ class TestLongRunRestriction:
 
     def test_screen_cache_misses_once_the_posterior_is_collected(self, permanent_transitory_2v):
         """A collected posterior's address can be recycled, so a dead referent
-        must read as a miss rather than serving another posterior's screen (#203)."""
+        must read as a miss rather than serving another posterior's screen."""
         fx = permanent_transitory_2v
         scheme = self._scheme()
         posterior = self._posterior_with(fx, lambda c, d: None)
@@ -781,7 +781,7 @@ class TestLongRunRestriction:
             )
 
     def test_from_zero_restrictions_infers_the_shock_order(self, permanent_transitory_2v):
-        """#188: an unsorted `shock_names` is recoverable from the counts, not an error."""
+        """An unsorted `shock_names` is recoverable from the counts, not an error."""
         fx = permanent_transitory_2v
         unsorted = LongRunRestriction.from_zero_restrictions(
             restrictions={"y1": ["transitory"]},

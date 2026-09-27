@@ -294,7 +294,7 @@ class StochasticVolatility(ImpulsoBaseModel):
         the per-variable level ``v{i}_mu`` is added back on, because
         ``forecast_log_vol`` only extrapolates the level-free ``v{i}_h``.
         Omitting it scales every forecast standard deviation by
-        ``exp(-mu_i / 2)`` while leaving the in-sample fit untouched (#241).
+        ``exp(-mu_i / 2)`` while leaving the in-sample fit untouched.
 
         Args:
             posterior: Dataset with per-variable log-vol paths (`h`)

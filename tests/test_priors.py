@@ -42,7 +42,7 @@ class TestMinnesotaPrior:
         assert "B_sigma" in result
 
     def test_sigma_is_required(self):
-        """`sigma` has no default — a caller must always supply it (issue 07a)."""
+        """`sigma` has no default — a caller must always supply it."""
         prior = MinnesotaPrior()
         with pytest.raises(TypeError):
             prior.build_priors(n_vars=3, n_lags=2)  # ty: ignore[missing-argument]
@@ -56,8 +56,8 @@ class TestMinnesotaPrior:
 
 
 class TestMinnesotaPriorCrossLagScaling:
-    """Cross-lag prior sd scales by sigma_i/sigma_j; own lags are unchanged
-    (issue 07a). `build_priors` is a pure function of `sigma`, so these
+    """Cross-lag prior sd scales by sigma_i/sigma_j; own lags are unchanged.
+    `build_priors` is a pure function of `sigma`, so these
     properties are checked directly against varying `sigma` inputs rather
     than through a fitted model.
     """
@@ -181,7 +181,7 @@ class TestMinnesotaPriorCrossLagScaling:
 
 
 class TestMinnesotaPriorRejectsDegenerateSigma:
-    """`build_priors` validates a directly supplied `sigma` (issue 07b): a zero,
+    """`build_priors` validates a directly supplied `sigma`: a zero,
     negative, or non-finite entry would blow up the cross-lag ratio it feeds --
     collapsing that variable's own row and sending every other row's coefficient
     on its lag to inf, with the own-lag entry itself becoming 0.0 / 0.0 = nan.

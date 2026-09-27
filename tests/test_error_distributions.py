@@ -1,4 +1,4 @@
-"""Tests for the observation error-distribution seam (issue #152).
+"""Tests for the observation error-distribution seam.
 
 All fast — no MCMC. The innovation-draw tests deliberately avoid sample
 moments that do not exist or converge slowly: sample kurtosis has infinite
@@ -45,7 +45,7 @@ class TestConfiguration:
 
     @pytest.mark.parametrize("bad_alpha", [1.0, 0.5, 0.0, -1.0])
     def test_prior_alpha_at_or_below_one_rejected(self, bad_alpha):
-        """alpha <= 1 defeats the zero-density-at-the-origin design (issue #173)."""
+        """alpha <= 1 defeats the zero-density-at-the-origin design."""
         with pytest.raises(ValidationError, match=r"prior_alpha must be > 1\.0"):
             StudentT(prior_alpha=bad_alpha)
 

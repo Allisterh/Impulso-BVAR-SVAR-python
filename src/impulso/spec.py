@@ -50,7 +50,7 @@ def _validate_sigma_is_usable(
     *,
     source: Literal["ar1_residual_sd", "endog_scales"] = "ar1_residual_sd",
 ) -> None:
-    """Reject a per-variable scale that would break every prior dividing by it (issue 07b).
+    """Reject a per-variable scale that would break every prior dividing by it.
 
     `sigma` (`ar1_residual_sd(endog)`, or the caller's `endog_scales`) is resolved
     once in `VAR.build_in_model` and shared by `Prior.build_priors` — whose
@@ -73,7 +73,7 @@ def _validate_sigma_is_usable(
     `source` only changes the wording of the error: `sigma` reaches this function
     either computed from the data (`ar1_residual_sd`) or supplied directly by the
     caller (`endog_scales`), and a message blaming `ar1_residual_sd` for a bad
-    `endog_scales` is simply wrong — that function never ran (issue 08c).
+    `endog_scales` is simply wrong — that function never ran.
 
     Args:
         sigma: Per-variable scale, shape `(n_vars,)` — `ar1_residual_sd(endog)`,
@@ -116,7 +116,7 @@ def _resolve_sigma(
     endog_names: Sequence[str],
     n_vars: int,
 ) -> np.ndarray:
-    """Resolve and validate `VAR.build_in_model`'s shared `sigma` (issue 08c).
+    """Resolve and validate `VAR.build_in_model`'s shared `sigma`.
 
     `endog_scales=None` computes `sigma` from `endog` via `ar1_residual_sd`.
     Otherwise the caller's array is coerced with `np.asarray(..., dtype=float)`
@@ -139,7 +139,7 @@ def _resolve_sigma(
     Raises:
         ValueError: If `endog_scales` does not have shape `(n_vars,)`.
         ValueError: If any entry of the resolved `sigma` is zero, negative or
-            non-finite (issue 07b).
+            non-finite.
     """
     # Lazy: `_conjugate` imports scipy at module level, and `spec` is on the
     # package import path.
@@ -181,7 +181,7 @@ def _symbolic_endog_n_vars(
     endog_scales: np.ndarray | Sequence[float] | None,
     endog_names: Sequence[str],
 ) -> int:
-    """Validate a symbolic `endog` for `VAR.build_in_model` and return `n_vars` (issue 09a).
+    """Validate a symbolic `endog` for `VAR.build_in_model` and return `n_vars`.
 
     A symbolic `endog` (e.g. a `pm.Data` container the caller owns) cannot go
     through the numpy-only steps: `ar1_residual_sd`, the OLS pre-fit
@@ -215,7 +215,7 @@ def _check_latent_endog_shape(
     exog: np.ndarray | None,
     observed_names: Sequence[str],
 ) -> None:
-    """Check the observed `endog` and `exog` shapes on the latent-series path (issue 09b).
+    """Check the observed `endog` and `exog` shapes on the latent-series path.
 
     Raises:
         TypeError: If `endog` is a dimmed `XTensorVariable`.
@@ -253,14 +253,14 @@ def _reject_unsupported_for_embedded_path(
     symbolic: bool,
     n_latent: int,
 ) -> None:
-    """Reject spec options the embedded path cannot support, before any variable is registered (issue 09d).
+    """Reject spec options the embedded path cannot support, before any variable is registered.
 
     `build_in_model`'s plain numpy path — concrete `endog`, no latent series
     — can run OLS on the data to pick a lag order and to seed stochastic-
     volatility priors, and its likelihood can be any `ErrorDistribution`. The
-    embedded path drops each of those: a symbolic `endog` (issue 09a) has no
+    embedded path drops each of those: a symbolic `endog` has no
     concrete values to run OLS on at graph-build time, and a latent series
-    (issue 09b) has none at all — it is generated inside the model. This
+    has none at all — it is generated inside the model. This
     runs first in `build_in_model`, before `_latent_n_vars`/
     `_symbolic_endog_n_vars` or any `pm.Normal`/`add_coords` call, so a spec
     these options would misconfigure never leaves a partially-built model
@@ -321,7 +321,7 @@ def _latent_n_vars(
     endog_scales: np.ndarray | Sequence[float] | None,
     latent_names: Sequence[str],
 ) -> int:
-    """Validate `VAR.build_in_model`'s latent-series inputs and return `n_vars` (issue 09b).
+    """Validate `VAR.build_in_model`'s latent-series inputs and return `n_vars`.
 
     With latent series, `endog_names` is the full VAR order and `endog` holds
     only the observed columns, which follow the latent ones. `n_vars` is
@@ -329,7 +329,7 @@ def _latent_n_vars(
 
     The error-distribution check that used to live here (a latent series
     needs Gaussian errors) is now `_reject_unsupported_for_embedded_path`,
-    which runs before this function and raises the same way (issue 09d).
+    which runs before this function and raises the same way.
 
     Raises:
         TypeError: If `endog` is a dimmed `XTensorVariable`.
@@ -476,7 +476,7 @@ def _latent_path(
     L: "pt.TensorVariable",
     init_sigma: np.ndarray,
 ) -> "tuple[pt.TensorVariable, pt.TensorVariable]":
-    """Register and generate the latent series non-centred (issue 09b).
+    """Register and generate the latent series non-centred.
 
     Registers `latent_init`, a `Normal(0, init_sigma)` prior on each latent
     series' first `n_lags` values, shape `(n_lags, n_latent)`, and
@@ -621,7 +621,7 @@ def _intercept_mask(endog_names: Sequence[str], intercept_equations: Sequence[st
 
 
 def _register_intercept(intercept_mask: np.ndarray) -> "tuple[pt.TensorVariable | None, pt.TensorVariable]":
-    """Register `VAR.build_in_model`'s intercept (issue 08b).
+    """Register `VAR.build_in_model`'s intercept.
 
     Returns:
         Tuple `(intercept, intercept_term)`: the free variable (`None` when
@@ -1038,7 +1038,7 @@ class VAR(ImpulsoBaseModel):
         registered for them. `latent_init_sigma` sets only the start of the
         path; the VAR is the latent series' only prior after that.
 
-        Latent stationarity (issue 09c): an explosive draw of the latent
+        Latent stationarity: an explosive draw of the latent
         equations' coefficients makes the generated path explode over the
         sample and can freeze a chain. Three things guard against it. The
         `pm.Potential` `"latent_stationarity"` is 0 when the spectral radius
@@ -1162,17 +1162,16 @@ class VAR(ImpulsoBaseModel):
                 of likelihood rows (`T - n_lags`) — see "Time coordinate"
                 above.
             ValueError: If any entry of the scale — computed or supplied via
-                `endog_scales` — is zero, negative or non-finite (issue 07b).
-            ValueError: If `endog_scales` does not have shape `(n_vars,)`
-                (issue 08c).
+                `endog_scales` — is zero, negative or non-finite.
+            ValueError: If `endog_scales` does not have shape `(n_vars,)`.
             TypeError: If `endog` is a dimmed `XTensorVariable` rather than a
-                plain tensor — pass its `.values` (issue 09a).
+                plain tensor — pass its `.values`.
             ValueError: If `endog` is symbolic and `endog_scales` is `None`,
                 if it is not 2-D, or if its static column count differs
-                from `len(endog_names)` (issue 09a).
+                from `len(endog_names)`.
             ValueError: If `intercept_equations` names an equation not in
                 `endog_names`, or names one more than once.
-            ValueError: With latent series (issue 09b): if `endog_names`
+            ValueError: With latent series: if `endog_names`
                 does not start with exactly `latent_names`, if no observed
                 series is left, if `endog`'s column count is not the number
                 of observed series, if `exog` has a different number of
@@ -1181,7 +1180,7 @@ class VAR(ImpulsoBaseModel):
                 `latent_init_sigma` has the wrong length or a non-positive
                 entry.
             ValueError: On the embedded path — `endog` symbolic or latent
-                series present (issue 09d): if `self.lags` is a selection
+                series present: if `self.lags` is a selection
                 criterion string (lag selection runs OLS on data), or if
                 `self.volatility` is not `"constant"`/`Constant` (stochastic
                 volatility seeds its priors from OLS residuals). With latent

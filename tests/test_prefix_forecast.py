@@ -1,4 +1,4 @@
-"""Tests for prefix-aware forecast_log_vol (issue #90).
+"""Tests for prefix-aware forecast_log_vol.
 
 Pin tests: each dynamics forecasts correctly from a multivariate-shaped
 posterior with v{i}_* names, and per-variable results match the equivalent
@@ -196,7 +196,7 @@ class TestForecastCholeskyPathUsesPrefix:
 
 
 class TestForecastLevelComposition:
-    """The forecast must reproduce `build_pymc_latent`'s composition (#241).
+    """The forecast must reproduce `build_pymc_latent`'s composition.
 
     In sample, random-walk dynamics registers `h[..., i] = v{i}_h + v{i}_mu`
     — the level lives *outside* the extrapolated path. A forecast that reads
@@ -216,8 +216,8 @@ class TestForecastLevelComposition:
         """With no innovation the forecast is pinned to the last in-sample h.
 
         `L_t = diag(exp(h_t / 2)) @ R_chol` and `R_chol` has a unit
-        diagonal, so `diag(L_t) == exp(h_t / 2)` exactly. Under the #241
-        bug this reads `exp(v_h[-1] / 2)` and the assertion fails by a
+        diagonal, so `diag(L_t) == exp(h_t / 2)` exactly. Without the level
+        term this reads `exp(v_h[-1] / 2)` and the assertion fails by a
         factor of `exp(mu_i / 2)`.
         """
         from impulso.sv.spec import StochasticVolatility

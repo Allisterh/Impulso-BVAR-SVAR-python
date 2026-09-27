@@ -405,7 +405,7 @@ class TestPartialIdentification:
 
 
 class TestNaNShockMatrixGuard:
-    """#187: NaN draws are named, not surfaced as LAPACK's 'SVD did not converge'."""
+    """NaN draws are named, not surfaced as LAPACK's 'SVD did not converge'."""
 
     def test_nan_draws_error_before_the_rank_check(self, identified_long_run_nan_draws):
         with (
@@ -541,7 +541,7 @@ class TestResultSurface:
 
 
 class TestHeavyTailedErrorsRejected:
-    """structural_scenario is Gaussian-only (issue #152).
+    """structural_scenario is Gaussian-only.
 
     The ADPRR three-way partition draws the adjusting block from its
     Gaussian conditional law, and the plausibility statistic's chi-squared

@@ -423,8 +423,7 @@ class TestCholeskyOrderingLabels:
     **ordering** order; `shock_matrix` labels them `var_names` / `shock_names`
     and `impulse_response` left-multiplies by MA coefficients built in data
     order. If `identify` returned rows in ordering order instead, the labels
-    would be permuted and `Phi @ P` would mix coordinate systems. Regression
-    for #184.
+    would be permuted and `Phi @ P` would mix coordinate systems.
     """
 
     @staticmethod
@@ -528,7 +527,7 @@ class TestCholeskyOrderingLabels:
 
 
 class TestFEVDIsInvariantToTheErrorLaw:
-    """FEVD is exactly invariant to the scale-vs-covariance convention (#152).
+    """FEVD is exactly invariant to the scale-vs-covariance convention.
 
     Theta = Phi @ P, and P -> cP scales numerator and denominator by c^2.
     """

@@ -1,4 +1,4 @@
-"""Tests for density forecasts (issue #92).
+"""Tests for density forecasts.
 
 Pin-first: mean-mode regression pins captured against current code BEFORE
 any behaviour change. Then density-mode tests verify the new behaviour.
@@ -205,7 +205,7 @@ class TestSeedReproducibility:
 
 
 class TestStudentTDensityForecast:
-    """Density forecasting under Student-t observation errors (issue #152)."""
+    """Density forecasting under Student-t observation errors."""
 
     def test_shape_and_finiteness(self, fitted_constant_t):
         result = fitted_constant_t.forecast(steps=5, seed=42)

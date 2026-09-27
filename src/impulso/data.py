@@ -35,7 +35,7 @@ class VARData(ImpulsoBaseModel):
     identified; it is rejected rather than silently soaking up an arbitrary
     share of the intercept.
 
-    Endogenous columns must vary within the sample too (issue 07b). A
+    Endogenous columns must vary within the sample too. A
     constant series has no residual variance for any VAR estimator to fit,
     and once a Minnesota-style prior scales its cross-lag terms by each
     column's AR(1) residual scale (`sigma_i / sigma_j`, docs/adr/0015), a
@@ -54,7 +54,7 @@ class VARData(ImpulsoBaseModel):
 
     Attributes:
         endog: Endogenous variable array of shape (T, n) where T >= 1 and n >= 2.
-            Every column must vary within the sample (issue 07b).
+            Every column must vary within the sample.
         endog_names: Names for each endogenous variable. Must be unique.
         exog: Optional exogenous variable array of shape (T, k). Every column
             must take at least two distinct values. Endogenous variables are
@@ -94,7 +94,7 @@ class VARData(ImpulsoBaseModel):
 
     @staticmethod
     def _validate_endog_varies(endog: np.ndarray, endog_names: Sequence[str]) -> None:
-        """Reject endogenous columns that are exactly constant (issue 07b).
+        """Reject endogenous columns that are exactly constant.
 
         A constant series has zero residual variance, so no VAR estimator —
         conjugate or PyMC — has a coherent shock to fit for it: the

@@ -67,7 +67,7 @@ class MinnesotaPrior(ImpulsoModel):
             in every *other* row that references variable `c`'s lag
             (`sigma[c]` in the denominator) blows up instead — the ratio can
             reach `1e12` or more for an otherwise-ordinary numerically
-            near-constant column. That is by design (issue 07b): the column
+            near-constant column. That is by design: the column
             still varies, so it is still a real, identified variable: it
             just gets an effectively flat, uninformative cross-lag prior
             everywhere but its own equation.
@@ -81,7 +81,7 @@ class MinnesotaPrior(ImpulsoModel):
             is ever computed from them, and `VAR._build_pymc_model` checks
             the `sigma` it computes before calling this method, so both
             guards run ahead of `build_priors` on the normal `VAR.fit` /
-            `VAR.prior_predictive` path (issue 07b). The check here exists
+            `VAR.prior_predictive` path. The check here exists
             for callers who construct `MinnesotaPrior` and call
             `build_priors` directly, supplying their own `sigma`.
 
@@ -100,7 +100,7 @@ class MinnesotaPrior(ImpulsoModel):
 
         Raises:
             ValueError: If `sigma` does not have length `n_vars`, or if any
-                entry of `sigma` is zero, negative, or non-finite (issue 07b).
+                entry of `sigma` is zero, negative, or non-finite.
             ValueError: If `own_lag_mean` is a sequence whose length is not
                 `n_vars`.
         """

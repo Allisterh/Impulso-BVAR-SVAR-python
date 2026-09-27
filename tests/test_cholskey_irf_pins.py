@@ -3,7 +3,7 @@
 These tests capture the exact numerical output of impulse_response, fevd,
 and historical_decomposition under Cholesky identification via the public
 pipeline (FittedVAR -> set_identification_strategy). They MUST pass before
-AND after the #91 shock_matrix refactor to prove the refactor is
+AND after a shock_matrix refactor to prove the refactor is
 behaviour-preserving.
 
 Fast tests use a self-consistent synthetic InferenceData fixture with

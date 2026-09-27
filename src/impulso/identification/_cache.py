@@ -23,7 +23,7 @@ class _PosteriorCache:
     Keying such a memo on `id(posterior)` is unsafe: once the posterior is
     garbage collected its address can be reused by a new object, and a
     subsequent lookup with a *different* posterior that happens to land on
-    the recycled address returns a stale value silently (issue #203). This
+    the recycled address returns a stale value silently. This
     cache stores `weakref.ref(owner)` instead and treats a dead referent —
     or a live referent that is not the object being looked up — as a miss.
     The referent identity check (`ref() is owner`) subsumes an `id()`
@@ -48,8 +48,8 @@ class _PosteriorCache:
     variable name, a horizon). Do not put arrays there — elementwise
     comparison would not yield a bool.
 
-    Adopted by `ProxySVAR._impact_cache` and `LongRunRestriction._lr_cache`
-    (issue #203). The one remaining identity-keyed memo in this module
+    Adopted by `ProxySVAR._impact_cache` and `LongRunRestriction._lr_cache`.
+    The one remaining identity-keyed memo in this module
     collapses to the same three lines once its branch merges:
 
         MaxShare._spectral_cache:

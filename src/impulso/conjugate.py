@@ -98,7 +98,7 @@ class ConjugateVAR(ImpulsoBaseModel):
     @field_validator("volatility", mode="after")
     @classmethod
     def _require_estimable_hyperparameters(cls, value: ConjugateVolatility | None) -> ConjugateVolatility | None:
-        """Reject a volatility break with nothing to estimate (issue #161).
+        """Reject a volatility break with nothing to estimate.
 
         The conjugate engine has no seam for fixed, known scales: it estimates the
         volatility hyperparameters jointly with the Minnesota tightness by Metropolis,

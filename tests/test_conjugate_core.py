@@ -115,7 +115,7 @@ def _sequential_logml(Y, X, Yd, Xd) -> float:
 
 
 class TestAr1ResidualSd:
-    """Pins `ar1_residual_sd` on a tiny fixed series (issue 03)."""
+    """Pins `ar1_residual_sd` on a tiny fixed series."""
 
     def test_pins_known_small_series(self):
         """Two-column series, hand-solved AR(1)-with-constant OLS per column.

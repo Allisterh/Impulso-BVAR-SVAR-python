@@ -276,7 +276,7 @@ class TestConstantCholeskyPath:
 
 
 # --------------------------------------------------------------------------------
-# Issue 06: per-variable innovation-scale prior (`InnovationScalePrior`,
+# Per-variable innovation-scale prior (`InnovationScalePrior`,
 # `Constant.innovation_scale_priors`).
 # --------------------------------------------------------------------------------
 
@@ -287,7 +287,7 @@ class TestConstantDefaultLogpUnchanged:
 
     Only touches API that already exists today (`Constant.build_pymc_latent`
     with no new field), so — unlike the rest of this section — this test is
-    NOT xfailed: it must pass identically before and after the issue 06
+    NOT xfailed: it must pass identically before and after this
     implementation lands.
     """
 
