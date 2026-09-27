@@ -612,6 +612,28 @@ class TestValidateSigmaIsUsable:
 
         _validate_sigma_is_usable(np.array([1.0, 1e-10, 5.0]), ["y1", "y2", "y3"])  # must not raise
 
+    def test_default_source_keeps_ar1_residual_sd_message(self):
+        """No explicit `source` is the data-derived path; its message is
+        unchanged by issue 08c."""
+        from impulso.spec import _validate_sigma_is_usable
+
+        with pytest.raises(ValueError, match="ar1_residual_sd"):
+            _validate_sigma_is_usable(np.array([1.0, 0.0]), ["y1", "y2"])
+
+    def test_endog_scales_source_drops_ar1_residual_sd_mention(self):
+        """`source="endog_scales"` names the actual source instead of blaming
+        `ar1_residual_sd`, which never ran on this path (issue 08c)."""
+        from impulso.spec import _validate_sigma_is_usable
+
+        with pytest.raises(ValueError, match=r"endog_scales") as exc_info:
+            _validate_sigma_is_usable(
+                np.array([1.0, 0.0]),
+                ["y1", "y2"],
+                source="endog_scales",
+            )
+        assert "ar1_residual_sd" not in str(exc_info.value)
+        assert "'y2'" in str(exc_info.value)
+
 
 class TestBuildPymcModelRejectsDegenerateSigma:
     """`_build_pymc_model` validates the `sigma` it computes before handing it to

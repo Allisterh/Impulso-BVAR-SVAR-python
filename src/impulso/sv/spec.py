@@ -317,7 +317,7 @@ class StochasticVolatility(ImpulsoBaseModel):
                 # `build_pymc_latent` composed the in-sample path as
                 # `v{i}_h + v{i}_mu`, but `forecast_log_vol` extrapolates
                 # `v{i}_h` alone. Re-apply the level, or the forecast bands
-                # come out at exp(-mu_i / 2) times the in-sample ones (#241).
+                # come out at exp(-mu_i / 2) times the in-sample ones.
                 h_i = h_i + posterior[f"{prefix}mu"].values[..., None]
             h_forecast[:, :, :, i] = h_i
         return self._clark_reconstruct(h_forecast, R_chol)
