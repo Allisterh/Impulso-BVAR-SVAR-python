@@ -1022,7 +1022,7 @@ class VAR(ImpulsoBaseModel):
             init_sigma = _latent_init_sigma(latent_init_sigma, n_latent)
         else:
             n_vars = _symbolic_endog_n_vars(endog, endog_scales, endog_names) if symbolic else endog.shape[1]
-        # With latent series (issue 09b) the observed block is conditioned on
+        # With latent series the observed block is conditioned on
         # generated values, so its likelihood is a Potential, as for a
         # symbolic `endog`, and the numpy-only steps are skipped.
         potential = symbolic or n_latent > 0
@@ -1123,14 +1123,9 @@ class VAR(ImpulsoBaseModel):
         if L.ndim == 2:
             pm.Deterministic("Sigma", pm.math.dot(L, L.T), dims=("var1", "var2"))
 
-        # Under Student-t errors L L' is the *scale* matrix (ADR-0007). A
-        # symbolic `endog` cannot be `observed`, so its likelihood is a
-        # `pm.Potential`, invisible to predictive sampling (ADR-0016).
-        #
-        # Latent series (issue 09b) are generated non-centred from
-        # standard-normal innovations `z`, and lead the Cholesky ordering, so
-        # the observed rows' residuals given `z` are exactly
-        # `resid_obs - L[obs, lat] z ~ MvN(0, L[obs, obs] L[obs, obs]')`.
+        # Under Student-t errors L L' is the *scale* matrix (ADR-0007). With a symbolic `endog` or latent
+        # series the likelihood is a `pm.Potential`, invisible to predictive sampling; latent series are
+        # non-centred, so the observed rows are conditioned on their innovations `z` (ADR-0016).
         latent = z = None
         if n_latent:
             latent, z = _latent_path(endog, X_exog, n_lags, n_vars, n_latent, intercept_term, B, B_exog, L, init_sigma)
