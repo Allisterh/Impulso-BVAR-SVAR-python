@@ -1248,9 +1248,8 @@ class VAR(ImpulsoBaseModel):
         # non-centred, so the observed rows are conditioned on their innovations `z` (ADR-0016).
         latent = z = None
         if n_latent:
-            # Start the latent equations inside the stationary region: an
-            # explosive own-lag makes the generated path explode and freezes
-            # the chain (issue 09c, `prototype/REPORT.md`, "Caveat 1").
+            # Start the latent equations inside the stationary region: an explosive own-lag
+            # makes the generated path explode and freezes the chain.
             model.set_initval(B, _latent_b_initval(prior_params["B_mu"], n_latent))
             _register_latent_stationarity(B, n_latent, n_vars, n_lags)
             latent, z = _latent_path(endog, X_exog, n_lags, n_vars, n_latent, intercept_term, B, B_exog, L, init_sigma)
