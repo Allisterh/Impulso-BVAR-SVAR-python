@@ -1689,6 +1689,8 @@ class TestLatentStationarity:
         """`eig` raises on a non-finite matrix; the Potential must turn that into
         -inf so NUTS records a divergence instead of aborting."""
         import pymc as pm
+        import pytensor
+        from packaging.version import Version
 
         with pm.Model() as model:
             VAR(lags=n_lags).build_in_model(**_latent_setup_n(rng, 1, n_lags))
@@ -1697,6 +1699,8 @@ class TestLatentStationarity:
         B = point["B"].copy()
         B[0, 0] = value
         assert self._potential(model, B) == -np.inf
+        if Version(pytensor.__version__) < Version("2.37"):
+            pytest.skip("PyTensor < 2.37 raises ValueError from SolveTriangular before compile_logp() runs")
         assert not np.isfinite(model.compile_logp()({**point, "B": B}))
 
     def test_logp_and_dlogp_compile_under_jax(self, rng):
