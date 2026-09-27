@@ -165,6 +165,22 @@ def test_rejects_pymc_volatility():
         ConjugateVAR(lags=1, prior=NIWPrior(), volatility=Constant())
 
 
+@pytest.mark.xfail(strict=True, reason="issue 09f")
+@pytest.mark.parametrize(
+    "prior",
+    [
+        NIWPrior(),
+        NIWPrior(tightness=0.4, select=True, sum_of_coefficients=0.5, single_unit_root=0.2),
+    ],
+    ids=["default", "custom"],
+)
+def test_niw_prior_round_trips_through_model_dump(prior):
+    """`ConjugateVAR.model_validate(spec.model_dump())` must equal `spec` (issue 09f)."""
+    spec = ConjugateVAR(lags=2, prior=prior)
+    assert ConjugateVAR.model_validate(spec.model_dump()) == spec
+    assert ConjugateVAR.model_validate(spec.model_dump(mode="json")) == spec
+
+
 class _NoHyperparameterBreak(ConjugateVolatility):
     """A well-formed adapter that declares nothing to estimate.
 
