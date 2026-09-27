@@ -34,13 +34,15 @@ VARData → VAR.fit() → FittedVAR → .set_identification_strategy() → Ident
 ### Key Features
 
 - **Full Bayesian inference** via PyMC (NUTS sampling, automatic diagnostics)
-- **Minnesota priors** for regularization in high-dimensional VARs
+- **Minnesota priors** for regularization in high-dimensional VARs, with cross-lag scaling by relative variable scale (ADR-0015)
+- **Per-variable innovation priors**: Override the innovation scale prior for individual variables
 - **Flexible identification schemes**: Recursive (Cholesky), sign restrictions
 - **Forecasting**: Point forecasts, credible intervals, and scenario analysis
 - **Impulse response functions** (IRFs) with uncertainty quantification
 - **Forecast error variance decomposition** (FEVD)
 - **Historical decomposition** of variables into structural shocks
 - **Dynamic multipliers**: Response of endogenous variables to exogenous (VARX) drivers
+- **Embeddable VARs**: Build a VAR inside an existing PyMC model with `VAR.build_in_model`, with symbolic observed data or latent endogenous series generated in the model under a stationarity constraint, then wrap the posterior with `FittedVAR.from_posterior` (see ADR-0016)
 - **Extensible protocols**: Plug in custom priors, samplers, and identification schemes
 - **Type-safe**: Frozen Pydantic models with full type hints
 
