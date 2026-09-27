@@ -792,16 +792,9 @@ class VAR(ImpulsoBaseModel):
         if L.ndim == 2:
             pm.Deterministic("Sigma", pm.math.dot(L, L.T), dims=("var1", "var2"))
 
-        # Likelihood. The error-distribution seam owns which law is
-        # registered; PyMC handles batched chol natively either way (for
-        # 2D L every observation uses the same chol; for 3D L (T, n, n)
-        # observation t uses chol[t]). Under Student-t errors, L L' is the
-        # *scale* matrix rather than the covariance — see ADR-0007.
-        #
-        # A symbolic `endog` cannot be an RV's `observed` value, so its
-        # likelihood is the same density as a `pm.Potential` under the same
-        # name. A Potential is not an RV: invisible to both prior and
-        # posterior predictive sampling.
+        # Under Student-t errors L L' is the *scale* matrix (ADR-0007). A
+        # symbolic `endog` cannot be `observed`, so its likelihood is a
+        # `pm.Potential`, invisible to predictive sampling (ADR-0016).
         error_dist = self.resolved_error_dist
         if symbolic:
             obs = pm.Potential("obs", error_dist.logp(mu=mu, chol=L, value=Y))
