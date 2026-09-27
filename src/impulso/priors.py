@@ -1,9 +1,10 @@
 """Prior specifications for VAR models."""
 
+import math
 from typing import Literal
 
 import numpy as np
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from impulso._base import ImpulsoModel
 from impulso._conjugate import ar1_residual_sd, minnesota_dummies
@@ -23,11 +24,25 @@ class MinnesotaPrior(ImpulsoModel):
             estimated from the data.
         decay: How coefficients shrink on longer lags.
         cross_shrinkage: Shrinkage on other variables' lags vs own. 0 = only own lags, 1 = equal.
+        own_lag_mean: Prior mean of each variable's own first-lag coefficient
+            (the Minnesota δᵢ): 1 for a random-walk series, 0 for a stationary
+            one. A scalar applies to every variable; a sequence gives one
+            entry per variable, in `endog_names` order, and its length is
+            checked against `n_vars` in `build_priors`. Must be finite.
     """
 
     tightness: float = Field(0.1, gt=0)
     decay: Literal["harmonic", "geometric"] = "harmonic"
     cross_shrinkage: float = Field(0.5, ge=0, le=1)
+    own_lag_mean: float | tuple[float, ...] = 1.0
+
+    @field_validator("own_lag_mean")
+    @classmethod
+    def _own_lag_mean_is_finite(cls, value: float | tuple[float, ...]) -> float | tuple[float, ...]:
+        values = value if isinstance(value, tuple) else (value,)
+        if not all(math.isfinite(v) for v in values):
+            raise ValueError(f"own_lag_mean must be finite, got {value!r}")
+        return value
 
     def build_priors(self, n_vars: int, n_lags: int, *, sigma: np.ndarray) -> dict[str, np.ndarray]:
         """Build prior mean and standard deviation arrays for VAR coefficients.
@@ -80,10 +95,14 @@ class MinnesotaPrior(ImpulsoModel):
 
         Returns:
             Dictionary with keys 'B_mu' and 'B_sigma' as numpy arrays.
+            `B_mu` is `own_lag_mean` on each variable's own first lag and 0
+            everywhere else.
 
         Raises:
             ValueError: If `sigma` does not have length `n_vars`, or if any
                 entry of `sigma` is zero, negative, or non-finite (issue 07b).
+            ValueError: If `own_lag_mean` is a sequence whose length is not
+                `n_vars`.
         """
         sigma = np.asarray(sigma, dtype=float)
         if sigma.shape != (n_vars,):
@@ -102,11 +121,16 @@ class MinnesotaPrior(ImpulsoModel):
                 "sigma (or the data it was derived from) upstream."
             )
 
+        own_lag_mean = np.asarray(self.own_lag_mean, dtype=float)
+        if own_lag_mean.ndim and own_lag_mean.shape != (n_vars,):
+            raise ValueError(
+                f"own_lag_mean must be a scalar or have {n_vars} entries to match n_vars, got {own_lag_mean.size}"
+            )
+
         n_coeffs = n_vars * n_lags
 
-        # B_mu: identity on the first lag block, zero elsewhere
         B_mu = np.zeros((n_vars, n_coeffs))
-        B_mu[np.arange(n_vars), np.arange(n_vars)] = 1.0
+        B_mu[np.arange(n_vars), np.arange(n_vars)] = own_lag_mean
 
         # Lag decay per column: each lag's decay repeated n_vars times
         lags = np.arange(1, n_lags + 1)

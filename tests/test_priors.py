@@ -225,45 +225,40 @@ class TestMinnesotaOwnLagMean:
 
     def test_explicit_default_matches_the_default(self):
         default = self._build(MinnesotaPrior())
-        explicit = self._build(MinnesotaPrior(own_lag_mean=1.0))  # ty: ignore[pydantic-discarded-extra-argument]
+        explicit = self._build(MinnesotaPrior(own_lag_mean=1.0))
         np.testing.assert_array_equal(explicit["B_mu"], default["B_mu"])
         np.testing.assert_array_equal(explicit["B_sigma"], default["B_sigma"])
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize(
         ("own_lag_mean", "diagonal"),
         [(0.0, [0.0, 0.0, 0.0]), (0.4, [0.4, 0.4, 0.4]), ((0.0, 1.0, 0.7), [0.0, 1.0, 0.7])],
     )
     def test_sets_only_the_own_first_lag(self, own_lag_mean, diagonal):
         default = self._build(MinnesotaPrior())
-        result = self._build(MinnesotaPrior(own_lag_mean=own_lag_mean))  # ty: ignore[pydantic-discarded-extra-argument]
+        result = self._build(MinnesotaPrior(own_lag_mean=own_lag_mean))
         expected = default["B_mu"].copy()
         expected[np.arange(3), np.arange(3)] = diagonal
         np.testing.assert_array_equal(result["B_mu"], expected)
         np.testing.assert_array_equal(result["B_sigma"], default["B_sigma"])
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     def test_list_is_accepted_as_a_sequence(self):
-        prior = MinnesotaPrior(own_lag_mean=[0.0, 0.5, 1.0])  # ty: ignore[pydantic-discarded-extra-argument]
+        prior = MinnesotaPrior(own_lag_mean=[0.0, 0.5, 1.0])
         np.testing.assert_array_equal(np.diag(self._build(prior)["B_mu"][:, :3]), [0.0, 0.5, 1.0])
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("own_lag_mean", [(0.0, 1.0), (0.0, 1.0, 1.0, 1.0)])
     def test_wrong_length_raises(self, own_lag_mean):
-        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)  # ty: ignore[pydantic-discarded-extra-argument]
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)
         with pytest.raises(ValueError, match="own_lag_mean"):
             self._build(prior)
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("own_lag_mean", [np.nan, np.inf, (0.0, -np.inf, 1.0)])
     def test_non_finite_raises(self, own_lag_mean):
         with pytest.raises(ValidationError, match="finite"):
-            MinnesotaPrior(own_lag_mean=own_lag_mean)  # ty: ignore[pydantic-discarded-extra-argument]
+            MinnesotaPrior(own_lag_mean=own_lag_mean)
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("own_lag_mean", [0.3, (0.0, 1.0, 0.7)])
     def test_round_trips(self, own_lag_mean):
-        prior = MinnesotaPrior(tightness=0.2, own_lag_mean=own_lag_mean)  # ty: ignore[pydantic-discarded-extra-argument]
+        prior = MinnesotaPrior(tightness=0.2, own_lag_mean=own_lag_mean)
         restored = MinnesotaPrior.model_validate(prior.model_dump())
         assert restored == prior
         assert restored.own_lag_mean == own_lag_mean

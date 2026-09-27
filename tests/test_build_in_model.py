@@ -1111,7 +1111,7 @@ def _stationary_latent_prior():
     """Minnesota prior with own-lag mean 0 for the latent `b` and 1 for the observed `y`."""
     from impulso.priors import MinnesotaPrior
 
-    return MinnesotaPrior(own_lag_mean=(0.0, 1.0))  # ty: ignore[pydantic-discarded-extra-argument]
+    return MinnesotaPrior(own_lag_mean=(0.0, 1.0))
 
 
 def _assert_no_frozen_chain(idata) -> None:
@@ -1295,7 +1295,6 @@ class TestLatentSeries:
         np.testing.assert_allclose(np.ravel(logp), stats.norm(0, 3.0).logpdf([0.4, -1.2]))
 
     @pytest.mark.slow
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("seed", [1, 2, 3])
     def test_small_latent_var_samples(self, seed):
         """One latent and one observed series, simulated from a stationary VAR(1).
@@ -1501,7 +1500,6 @@ def _prior_mu(rv) -> np.ndarray:
 class TestLatentOwnLagMeanAndInit:
     """`MinnesotaPrior(own_lag_mean=...)` on the latent path, and the stationary initial point for latent equations."""
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("own_lag_mean", [0.0, (0.0, 0.3, 1.0, 0.5)])
     def test_prior_own_lag_mean_reaches_B(self, rng, own_lag_mean):
         import pymc as pm
@@ -1509,7 +1507,7 @@ class TestLatentOwnLagMeanAndInit:
         from impulso.priors import MinnesotaPrior
 
         kwargs = _two_latent_setup(rng)
-        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)  # ty: ignore[pydantic-discarded-extra-argument]
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)
         with pm.Model() as model:
             VAR(lags=2, prior=prior).build_in_model(**kwargs)
 
@@ -1526,19 +1524,17 @@ class TestLatentOwnLagMeanAndInit:
 
         np.testing.assert_allclose(_prior_mu(model["B"]), _minnesota_b_mu(kwargs))
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     def test_latent_own_lag_mean_is_no_longer_accepted(self):
         import inspect
 
         assert "latent_own_lag_mean" not in inspect.signature(VAR.build_in_model).parameters
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     def test_wrong_length_own_lag_mean_raises(self, rng):
         import pymc as pm
 
         from impulso.priors import MinnesotaPrior
 
-        prior = MinnesotaPrior(own_lag_mean=(0.0, 0.3))  # ty: ignore[pydantic-discarded-extra-argument]
+        prior = MinnesotaPrior(own_lag_mean=(0.0, 0.3))
         with pm.Model(), pytest.raises(ValueError, match="own_lag_mean"):
             VAR(lags=2, prior=prior).build_in_model(**_two_latent_setup(rng))
 
@@ -1557,7 +1553,6 @@ class TestLatentOwnLagMeanAndInit:
         # Observed rows keep PyMC's default start, the prior mean.
         np.testing.assert_allclose(B0[2:], _minnesota_b_mu(kwargs)[2:])
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize(
         ("own_lag_mean", "start"),
         [((0.0, 0.3, 1.0, 1.0), [0.0, 0.3]), ((-0.4, 1.5, 1.0, 1.0), [-0.4, 0.5]), ((-1.0, 0.9, 1.0, 1.0), [0.5, 0.9])],
@@ -1568,7 +1563,7 @@ class TestLatentOwnLagMeanAndInit:
         from impulso.priors import MinnesotaPrior
 
         kwargs = _two_latent_setup(rng)
-        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)  # ty: ignore[pydantic-discarded-extra-argument]
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)
         with pm.Model() as model:
             VAR(lags=2, prior=prior).build_in_model(**kwargs)
 
@@ -1589,18 +1584,16 @@ class TestLatentOwnLagMeanAndInit:
 
         np.testing.assert_allclose(model.initial_point(random_seed=0)["B"], _minnesota_b_mu(kwargs))
 
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     def test_fit_path_uses_the_prior_own_lag_mean(self, rng):
         from impulso.priors import MinnesotaPrior
 
         data = _make_data(rng)
-        prior = MinnesotaPrior(own_lag_mean=0.4)  # ty: ignore[pydantic-discarded-extra-argument]
+        prior = MinnesotaPrior(own_lag_mean=0.4)
         model, _ = VAR(lags=1, prior=prior)._build_pymc_model(data)
 
         np.testing.assert_allclose(np.diag(_prior_mu(model["B"])), 0.4)
 
     @pytest.mark.slow
-    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("seed", [1, 2, 3])
     def test_default_init_samples_with_own_lag_mean_zero(self, seed):
         """The 09b slow-test data with PyMC's defaults (`jitter+adapt_diag`

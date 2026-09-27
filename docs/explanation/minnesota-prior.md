@@ -1,6 +1,6 @@
 # The Minnesota Prior
 
-The **Minnesota prior** {cite:p}`doan1984,litterman1986` is the most widely used prior for Bayesian VARs, and it is what Impulso applies by default. It encodes the belief that each variable follows a random walk, with coefficients on other variables' lags shrunk toward zero.
+The **Minnesota prior** {cite:p}`doan1984,litterman1986` is the most widely used prior for Bayesian VARs, and it is what Impulso applies by default. By default it encodes the belief that each variable follows a random walk, with coefficients on other variables' lags shrunk toward zero.
 
 This page is the reference statement of the prior. For a worked introduction with figures, prior predictive checks, and a bias–variance experiment, see [The Minnesota Prior, From Scratch](../tutorials/minnesota-prior.py).
 
@@ -29,17 +29,17 @@ $$
 \beta_{ij}^{(l)} \sim \mathcal{N}\!\left( m_{ij}^{(l)},\; \big(s_{ij}^{(l)}\big)^{2} \right),
 $$ (eq-mn-normal)
 
-with a random-walk mean,
+with mean
 
 $$
 m_{ij}^{(l)} =
 \begin{cases}
-1 & \text{if } i = j \text{ and } l = 1, \\
+\delta_i & \text{if } i = j \text{ and } l = 1, \\
 0 & \text{otherwise,}
 \end{cases}
 $$ (eq-mn-mean)
 
-and a standard deviation built from four multiplicative factors,
+where $\delta_i$ is variable $i$'s own-lag mean (`own_lag_mean`): 1 (the default) for a random walk, 0 for a stationary series. The standard deviation is built from four multiplicative factors,
 
 $$
 s_{ij}^{(l)} = \lambda \cdot d(l) \cdot
@@ -60,6 +60,7 @@ where $\sigma_i$ is the AR(1) residual standard deviation of variable $i$ (`impu
 | `tightness` | $\lambda$ | `0.1` | Overall shrinkage. $\lambda \to 0$ freezes the model at the random walk; $\lambda \to \infty$ recovers OLS. Must be $> 0$. |
 | `decay` | $d(l)$ | `"harmonic"` | How fast the prior tightens on longer lags. `"harmonic"`: $1/l$. `"geometric"`: $1/l^2$. |
 | `cross_shrinkage` | $\kappa$ | `0.5` | Shrinkage on other variables' lags relative to own lags. $\kappa = 0$ reduces the VAR to $n$ independent AR($p$) models; $\kappa = 1$ treats own and cross lags alike. Must lie in $[0, 1]$. |
+| `own_lag_mean` | $\delta_i$ | `1.0` | Prior mean of each variable's own first lag. A scalar applies to every variable; a tuple gives one entry per variable, in `endog_names` order. Must be finite. |
 
 $\sigma_i / \sigma_j$ is not a hyperparameter — it is always on, derived from the data, and has no opt-out.
 
@@ -67,13 +68,13 @@ Rough guidance: tighten $\lambda$ as the system grows, since the number of coeff
 
 ## What the prior implies
 
-The prior mean is a random walk, whose companion matrix has spectral radius exactly one. The Minnesota prior therefore sits **on the boundary of stationarity** by construction, and $\lambda$ controls how far around that boundary the prior mass spreads. It is not a stationarity prior — most prior draws are technically explosive at any $\lambda$, because the largest of several near-unit eigenvalues is biased upward. What small $\lambda$ buys is that they are only barely so: at $\lambda = 0.05$ in a 3-variable VAR(4), the median spectral radius is 1.05 and only about an eighth of draws exceed 1.10. At $\lambda = 1$ the median draw doubles a shock every period.
+With the default $\delta_i = 1$ the prior mean is a random walk, whose companion matrix has spectral radius exactly one. The Minnesota prior therefore sits **on the boundary of stationarity** by construction, and $\lambda$ controls how far around that boundary the prior mass spreads. It is not a stationarity prior — most prior draws are technically explosive at any $\lambda$, because the largest of several near-unit eigenvalues is biased upward. What small $\lambda$ buys is that they are only barely so: at $\lambda = 0.05$ in a 3-variable VAR(4), the median spectral radius is 1.05 and only about an eighth of draws exceed 1.10. At $\lambda = 1$ the median draw doubles a shock every period.
 
 ## Scope and caveats
 
 **Scale adjustment is always on.** {eq}`eq-mn-sd` includes the classical Litterman $\sigma_i / \sigma_j$ term (ADR-0015), so a cross-lag coefficient's prior is expressed in contribution space rather than raw coefficient space, regardless of the units your variables happen to be measured in. There is no flag to switch it off. Standardising your variables before fitting is no longer necessary for the prior to make sense, though it remains a reasonable habit for reading raw coefficient values. `NIWPrior` has scaled by the same $\sigma$ since it was written, via `minnesota_dummies`.
 
-**Levels, not growth rates.** The mean in {eq}`eq-mn-mean` is a statement about levels. On differenced, de-meaned, or standardised series a prior mean of one on the own first lag is too persistent; the honest centre is nearer zero. Write a custom zero-mean prior instead — see [Writing a Custom Prior](../how-to/custom-priors.md).
+**Levels, not growth rates.** The default mean in {eq}`eq-mn-mean` is a statement about levels. On differenced, de-meaned, or standardised series a prior mean of one on the own first lag is too persistent; the honest centre is nearer zero. Set $\delta_i$ for those series with `own_lag_mean`, e.g. `MinnesotaPrior(own_lag_mean=(1.0, 0.0, 0.0))` for one series in levels followed by two growth rates.
 
 **Coefficients only.** `MinnesotaPrior` governs the lag coefficients. Intercepts receive a fixed $\mathcal{N}(0, 1)$ prior, and the residual covariance $\Sigma$ is handled by the volatility process (`Constant` by default).
 
@@ -90,5 +91,9 @@ spec = VAR(lags=4, prior="minnesota")
 
 # Customize hyperparameters
 prior = MinnesotaPrior(tightness=0.2, decay="geometric", cross_shrinkage=0.3)
+spec = VAR(lags=4, prior=prior)
+
+# A stationary prior mean for the second and third series
+prior = MinnesotaPrior(own_lag_mean=(1.0, 0.0, 0.0))
 spec = VAR(lags=4, prior=prior)
 ```
