@@ -1067,19 +1067,14 @@ class TestVARSpecRoundTrip:
                 id="combined_prior_sv_gaussian_objects",
             ),
             pytest.param(
-                {"volatility": StochasticVolatility(dynamics=AR1())},
-                id="volatility_sv_nested_dynamics_ar1_object",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
+                {"volatility": StochasticVolatility(dynamics=AR1())}, id="volatility_sv_nested_dynamics_ar1_object"
             ),
             pytest.param(
                 {"volatility": StochasticVolatility(dynamics=RandomWalk())},
                 id="volatility_sv_nested_dynamics_random_walk_object",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
             ),
             pytest.param(
-                {"volatility": StochasticVolatility(prior=SVDefaultPrior())},
-                id="volatility_sv_nested_prior_object",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
+                {"volatility": StochasticVolatility(prior=SVDefaultPrior())}, id="volatility_sv_nested_prior_object"
             ),
         ],
     )
