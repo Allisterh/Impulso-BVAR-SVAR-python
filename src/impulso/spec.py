@@ -367,8 +367,7 @@ def _latent_path(
     z = pm.Normal("latent_innovations", mu=0.0, sigma=1.0, shape=(T - n_lags, n_latent))
 
     # `B` is lag-major over the full VAR order: column `l * n_vars + j` is
-    # variable `j`'s lag `l + 1`. Split each lag's block into its latent and
-    # observed columns.
+    # variable `j`'s lag `l + 1`.
     latent_cols = [lag * n_vars + j for lag in range(n_lags) for j in range(n_latent)]
     obs_cols = [lag * n_vars + j for lag in range(n_lags) for j in range(n_latent, n_vars)]
     B_lat = B[:n_latent]
