@@ -234,17 +234,9 @@ def _time_coord(model: Any, n_rows: int | None) -> dict[str, object]:
         # "time" coord and there is no length to check one against.
         return {}
     if "time" in model.coords:
-        # A previous call (this VAR's own wrapper, or a second VAR
-        # embedded in the same model — coords are not prefixed by a
-        # nested `pm.Model(name=...)`, see `VAR.build_in_model`) already
-        # registered "time". `add_coords` only rejects a duplicate coord
-        # whose *values* differ, and a plain length mismatch has equal
-        # odds of matching by chance as differing, so silently reusing
-        # it would either pass by luck or hand the likelihood a "time"
-        # dim of the wrong length — a shape error that would only
-        # surface much later, e.g. inside `sample_prior_predictive`.
-        # Reject it here instead, at the point that actually knows both
-        # lengths.
+        # `add_coords` only rejects a duplicate coord whose *values* differ,
+        # so a length mismatch could slip through and surface much later as
+        # a shape error, e.g. inside `sample_prior_predictive`.
         existing_length = int(model.dim_lengths["time"].eval())
         if existing_length != n_rows:
             raise ValueError(
@@ -259,10 +251,7 @@ def _time_coord(model: Any, n_rows: int | None) -> dict[str, object]:
         return {}
     # PyMC requires a named dim used on an *observed* multivariate RV
     # to already exist (unlike a free RV's `dims`, which it will
-    # auto-register). `_build_pymc_model` pre-registers "time" from
-    # `data.index` before calling `build_in_model`; a standalone call
-    # with no pre-registered "time" coord falls back to a plain
-    # positional index.
+    # auto-register).
     return {"time": list(range(n_rows))}
 
 
@@ -702,9 +691,6 @@ class VAR(ImpulsoBaseModel):
 
         model = pm.modelcontext(None)
 
-        # A symbolic `endog` (issue 09a) — e.g. a `pm.Data` container the
-        # caller owns — cannot go through the numpy-only steps below:
-        # `ar1_residual_sd`, the OLS pre-fit residuals, or an observed RV.
         symbolic = isinstance(endog, Variable)
         n_vars = _symbolic_endog_n_vars(endog, endog_scales, endog_names) if symbolic else endog.shape[1]
 
@@ -722,7 +708,7 @@ class VAR(ImpulsoBaseModel):
         # Number of likelihood rows, `T - n_lags`. A symbolic `endog` only
         # knows it when its static shape does: `pm.Data` and
         # `pytensor.shared` leave it `None`, since their value can be
-        # swapped for one of a different length. Then it stays `None`.
+        # swapped for one of a different length.
         if symbolic:
             static_T = endog.type.shape[0]
             n_rows = None if static_T is None else static_T - n_lags
