@@ -994,8 +994,59 @@ def _perturbed_point(model, rng: np.random.Generator) -> dict:
     return {name: value + 0.3 * rng.standard_normal(np.shape(value)) for name, value in point.items()}
 
 
+_STATIONARY_POINT_SEED = 20240921
+
+
+def _stationary_point(model, seed: int = _STATIONARY_POINT_SEED) -> dict:
+    """A deterministic evaluation point with a stationary latent block and a
+    well-conditioned Cholesky factor.
+
+    `_perturbed_point`'s uniform jitter has no such guarantee: on some draws
+    `B` lands outside the stationary region, so the hand-rolled recursions
+    that check `build_in_model`'s latent path explode and floating-point
+    error swamps even a loose `rtol`. This instead draws lag coefficients
+    `~0.1 * N(0, 1)` (comfortably stationary — callers assert the companion
+    spectral radius), a Cholesky diagonal from `[0.5, 1.5]` with `~0.1 *
+    N(0, 1)` off-diagonals, and everything else at `_perturbed_point`'s
+    `0.3 * N(0, 1)` scale.
+    """
+    local = np.random.default_rng(seed)
+    point = model.initial_point(random_seed=0)
+    for name, value in point.items():
+        shape = np.shape(value)
+        if name == "B":
+            point[name] = 0.1 * local.standard_normal(shape)
+        elif name == "sigma_sd_log__":
+            point[name] = np.log(local.uniform(0.5, 1.5, size=shape))
+        elif name == "tril_offdiag":
+            point[name] = 0.1 * local.standard_normal(shape)
+        else:
+            point[name] = 0.3 * local.standard_normal(shape)
+    return point
+
+
+def _companion_spectral_radius(B: np.ndarray, n_vars: int, n_lags: int) -> float:
+    """Spectral radius of the VAR(`n_lags`) companion matrix built from `B`."""
+    if n_lags == 1:
+        companion = B
+    else:
+        shift = np.eye(n_vars * (n_lags - 1), n_vars * n_lags)
+        companion = np.vstack([B, shift])
+    return float(np.max(np.abs(np.linalg.eigvals(companion))))
+
+
 def _evaluate(model, point: dict, names: list[str]) -> dict[str, np.ndarray]:
-    fn = model.compile_fn([model[name] for name in names], inputs=model.value_vars, on_unused_input="ignore")
+    """`names` evaluated at `point`.
+
+    `model[name]` is the random variable's forward-sampling node, not its
+    value variable, so compiling it directly against `model.value_vars`
+    ignores `point` entirely and redraws from the prior on every call —
+    `replace_rvs_by_values` first rewrites each requested graph in terms of
+    its value variables (undoing each one's transform, e.g. `sigma_sd`'s
+    log), so `fn(point)` is a pure, deterministic function of `point`.
+    """
+    outs = model.replace_rvs_by_values([model[name] for name in names])
+    fn = model.compile_fn(outs, inputs=model.value_vars, on_unused_input="ignore")
     return dict(zip(names, (np.asarray(v) for v in fn(point)), strict=True))
 
 
@@ -1066,11 +1117,12 @@ class TestLatentSeries:
         with pm.Model() as model:
             VAR(lags=n_lags).build_in_model(**kwargs)
 
-        point = _perturbed_point(model, rng)
+        point = _stationary_point(model)
         names = ["latent", "B", "L", "intercept", "latent_innovations", "obs"]
         if with_exog:
             names.append("B_exog")
         values = _evaluate(model, point, names)
+        assert _companion_spectral_radius(values["B"], n_vars=3, n_lags=n_lags) <= 0.8
 
         full = np.column_stack([values["latent"], obs])
         B, L, z = values["B"], values["L"], values["latent_innovations"]
@@ -1278,11 +1330,12 @@ class TestLatentSeries:
                 latent_names=latent_names,  # ty: ignore[unknown-argument]
             )
 
-        point = _perturbed_point(model, rng)
+        point = _stationary_point(model)
         values = _evaluate(
             model, point, ["latent", "B", "B_exog", "L", "intercept", "latent_init", "latent_innovations", "obs"]
         )
         B, L, z, c = values["B"], values["L"], values["latent_innovations"], values["intercept"]
+        assert _companion_spectral_radius(B, n_vars, n_lags) <= 0.8
 
         full = np.zeros((T, n_vars))
         full[:, n_latent:] = obs
