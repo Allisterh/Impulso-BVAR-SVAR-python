@@ -1151,7 +1151,7 @@ class TestLatentSeries:
         import pymc as pm
 
         kwargs = _latent_setup(rng)
-        kwargs["endog_scales"] = np.array([1.0, 2.0])  # observed columns only
+        kwargs["endog_scales"] = np.array([1.0, 2.0])
         with pm.Model(), pytest.raises(ValueError, match=r"endog_scales.*latent"):
             VAR(lags=2).build_in_model(**kwargs)
 
@@ -1169,7 +1169,7 @@ class TestLatentSeries:
         import pymc as pm
 
         kwargs = _latent_setup(rng)
-        kwargs["endog"] = np.column_stack([rng.standard_normal(40), kwargs["endog"]])  # latent column passed too
+        kwargs["endog"] = np.column_stack([rng.standard_normal(40), kwargs["endog"]])
         with pm.Model(), pytest.raises(ValueError, match="observed"):
             VAR(lags=2).build_in_model(**kwargs)
 
