@@ -15,6 +15,8 @@ See docs/adr/0004-conjugate-var-is-a-sibling-estimator.md and the build contract
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import xarray as xr
 from pydantic import Field, field_validator
 
@@ -43,6 +45,15 @@ class ConjugateVAR(ImpulsoBaseModel):
             one hyperparameter to estimate; an adapter with none is rejected
             at construction because the closed-form fast path would silently
             ignore it.
+
+            Unlike ``prior``, a subclassed break does not round-trip through
+            ``model_dump``/``model_validate``: pydantic serialises a field typed
+            as the base ``ConjugateVolatility`` using that base class's own
+            schema, which drops a subclass's extra fields (e.g.
+            :class:`~impulso.conjugate_volatility.PandemicBreak`'s ``name`` and
+            ``start``). Fixing this generically needs a real extension-point
+            mechanism (``ConjugateVolatility`` is open to third-party subclasses,
+            unlike the single concrete ``NIWPrior``).
         draws: Number of retained posterior draws.
         tune: Number of Metropolis warm-up iterations (ignored on the fixed-prior fast path).
         seed: Seed for the single RNG driving selection, sampling and coefficient draws.
@@ -58,14 +69,19 @@ class ConjugateVAR(ImpulsoBaseModel):
     @field_validator("prior", mode="before")
     @classmethod
     def _require_niw_prior(cls, value: object) -> object:
-        """Reject non-conjugate priors, pointing at ``VAR`` for the NUTS path."""
-        if not isinstance(value, NIWPrior):
-            raise ValueError(  # noqa: TRY004
-                f"ConjugateVAR requires a conjugate NIWPrior, got {type(value).__name__}. "
-                "Independent-Normal priors (e.g. MinnesotaPrior) belong to the PyMC/NUTS "
-                "estimator: use `impulso.VAR(prior=...)` instead."
-            )
-        return value
+        """Reject a non-conjugate prior *object*, pointing at ``VAR`` for the NUTS path.
+
+        A mapping (e.g. from `model_dump`) is left to the field's own `NIWPrior`
+        validation rather than rejected here, so a `ConjugateVAR` spec still
+        round-trips through `model_dump`/`model_validate`.
+        """
+        if isinstance(value, (Mapping, NIWPrior)):
+            return value
+        raise ValueError(
+            f"ConjugateVAR requires a conjugate NIWPrior, got {type(value).__name__}. "
+            "Independent-Normal priors (e.g. MinnesotaPrior) belong to the PyMC/NUTS "
+            "estimator: use `impulso.VAR(prior=...)` instead."
+        )
 
     @field_validator("volatility", mode="before")
     @classmethod

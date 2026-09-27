@@ -1,12 +1,13 @@
 """StochasticVolatility model specification."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import numpy as np
+from pydantic import Field
 
 from impulso._base import ImpulsoBaseModel
 from impulso.sv.data import SVData
-from impulso.sv.dynamics import SV_DYNAMICS_REGISTRY, SVDynamics
+from impulso.sv.dynamics import AR1, SV_DYNAMICS_REGISTRY, RandomWalk, SVDynamics
 from impulso.sv.priors import SVDefaultPrior, SVPrior
 
 if TYPE_CHECKING:
@@ -36,8 +37,10 @@ class StochasticVolatility(ImpulsoBaseModel):
 
     name: Literal["sv"] = "sv"
     is_time_varying: bool = True
-    dynamics: Literal["random_walk", "ar1"] | SVDynamics = "random_walk"
-    prior: Literal["default"] | SVPrior = "default"
+    dynamics: Literal["random_walk", "ar1"] | Annotated[RandomWalk | AR1, Field(discriminator="name")] | SVDynamics = (
+        "random_walk"
+    )
+    prior: Literal["default"] | SVDefaultPrior | SVPrior = "default"
 
     @property
     def resolved_dynamics(self) -> SVDynamics:

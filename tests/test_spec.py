@@ -1018,28 +1018,18 @@ class TestVARSpecRoundTrip:
         [
             pytest.param({}, id="all_defaults"),
             pytest.param({"prior": "minnesota"}, id="prior_string"),
-            pytest.param(
-                {"prior": MinnesotaPrior()},
-                id="prior_object_default",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
-            ),
+            pytest.param({"prior": MinnesotaPrior()}, id="prior_object_default"),
             pytest.param(
                 {"prior": MinnesotaPrior(tightness=0.05, decay="geometric", cross_shrinkage=0.9, own_lag_mean=0.4)},
                 id="prior_object_custom",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
             ),
             pytest.param(
                 {"prior": MinnesotaPrior(own_lag_mean=(1.0, 0.0, 0.5))},
                 id="prior_object_own_lag_mean_tuple",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
             ),
             pytest.param({"volatility": "constant"}, id="volatility_string_constant"),
             pytest.param({"volatility": "sv"}, id="volatility_string_sv"),
-            pytest.param(
-                {"volatility": Constant()},
-                id="volatility_constant_object_default",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
-            ),
+            pytest.param({"volatility": Constant()}, id="volatility_constant_object_default"),
             pytest.param(
                 {
                     "volatility": Constant(
@@ -1051,30 +1041,13 @@ class TestVARSpecRoundTrip:
                     )
                 },
                 id="volatility_constant_innovation_scale_priors",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
             ),
-            pytest.param(
-                {"volatility": StochasticVolatility()},
-                id="volatility_sv_object_default",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
-            ),
+            pytest.param({"volatility": StochasticVolatility()}, id="volatility_sv_object_default"),
             pytest.param({"error_dist": "gaussian"}, id="error_dist_string_gaussian"),
             pytest.param({"error_dist": "student_t"}, id="error_dist_string_student_t"),
-            pytest.param(
-                {"error_dist": Gaussian()},
-                id="error_dist_gaussian_object",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
-            ),
-            pytest.param(
-                {"error_dist": StudentT(nu=5.0)},
-                id="error_dist_student_t_object_fixed_nu",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
-            ),
-            pytest.param(
-                {"error_dist": StudentT()},
-                id="error_dist_student_t_object_inferred_nu",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
-            ),
+            pytest.param({"error_dist": Gaussian()}, id="error_dist_gaussian_object"),
+            pytest.param({"error_dist": StudentT(nu=5.0)}, id="error_dist_student_t_object_fixed_nu"),
+            pytest.param({"error_dist": StudentT()}, id="error_dist_student_t_object_inferred_nu"),
             pytest.param(
                 {
                     "prior": MinnesotaPrior(own_lag_mean=0.7),
@@ -1084,7 +1057,6 @@ class TestVARSpecRoundTrip:
                     "error_dist": StudentT(nu=6.0),
                 },
                 id="combined_prior_volatility_error_dist_objects",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
             ),
             pytest.param(
                 {
@@ -1093,7 +1065,6 @@ class TestVARSpecRoundTrip:
                     "error_dist": Gaussian(),
                 },
                 id="combined_prior_sv_gaussian_objects",
-                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
             ),
             pytest.param(
                 {"volatility": StochasticVolatility(dynamics=AR1())},

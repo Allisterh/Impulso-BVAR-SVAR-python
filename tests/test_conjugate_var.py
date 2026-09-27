@@ -165,7 +165,6 @@ def test_rejects_pymc_volatility():
         ConjugateVAR(lags=1, prior=NIWPrior(), volatility=Constant())
 
 
-@pytest.mark.xfail(strict=True, reason="issue 09f")
 @pytest.mark.parametrize(
     "prior",
     [
