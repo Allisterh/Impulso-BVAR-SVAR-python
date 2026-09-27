@@ -11,6 +11,8 @@ from impulso.data import VARData
 from impulso.observation import Gaussian, StudentT
 from impulso.priors import MinnesotaPrior
 from impulso.spec import VAR, _exog_prior_sigma
+from impulso.sv.dynamics import AR1, RandomWalk
+from impulso.sv.priors import SVDefaultPrior
 from impulso.sv.spec import StochasticVolatility
 from impulso.volatility import Constant, InnovationScalePrior
 
@@ -1091,6 +1093,21 @@ class TestVARSpecRoundTrip:
                     "error_dist": Gaussian(),
                 },
                 id="combined_prior_sv_gaussian_objects",
+                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
+            ),
+            pytest.param(
+                {"volatility": StochasticVolatility(dynamics=AR1())},
+                id="volatility_sv_nested_dynamics_ar1_object",
+                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
+            ),
+            pytest.param(
+                {"volatility": StochasticVolatility(dynamics=RandomWalk())},
+                id="volatility_sv_nested_dynamics_random_walk_object",
+                marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
+            ),
+            pytest.param(
+                {"volatility": StochasticVolatility(prior=SVDefaultPrior())},
+                id="volatility_sv_nested_prior_object",
                 marks=pytest.mark.xfail(strict=True, reason="issue 09f"),
             ),
         ],
