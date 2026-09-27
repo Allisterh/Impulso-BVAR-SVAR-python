@@ -1157,8 +1157,7 @@ class VAR(ImpulsoBaseModel):
         # exogenous block is needed before then.
         if n_latent:
             X_exog = exog[n_lags:] if exog is not None else None
-            # Latent equations' own first lags (issue 09c). `coeff` is
-            # lag-major, so lag 1 of series `i` is column `i`.
+            # `coeff` is lag-major, so lag 1 of series `i` is column `i`.
             B_mu = np.array(prior_params["B_mu"], dtype=float)
             B_mu[np.arange(n_latent), np.arange(n_latent)] = own_lag_mean
             prior_params = {**prior_params, "B_mu": B_mu}
