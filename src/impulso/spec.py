@@ -569,11 +569,8 @@ class VAR(ImpulsoBaseModel):
         # `sigma` is the per-variable scale — computed once here (or taken
         # from the caller) and reused for both the Minnesota lag-coefficient
         # prior (cross-lag sigma_i/sigma_j scaling, docs/adr/0015) and the
-        # exogenous-coefficient prior below (#192). `_resolve_sigma` coerces
-        # and shape-checks a caller-supplied `endog_scales` and validates
-        # either path immediately: a zero/non-finite entry would blow up
-        # both (issue 07b), and it tailors the error to the actual source
-        # (issue 08c).
+        # exogenous-coefficient prior below (#192), so a zero/non-finite
+        # entry would blow up both (issue 07b).
         n_vars = endog.shape[1]
         sigma = _resolve_sigma(endog, endog_scales, endog_names, n_vars)
         intercept_mask = _intercept_mask(endog_names, intercept_equations)
