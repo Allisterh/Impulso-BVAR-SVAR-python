@@ -391,7 +391,7 @@ def _register_latent_stationarity(B: Any, n_latent: int, n_vars: int, n_lags: in
     # explosive one (radius 2) so the Potential is `-inf`.
     matrix = _latent_companion(B, n_latent, n_vars, n_lags)
     size = n_latent * n_lags
-    matrix = pt.switch(pt.all(pt.isfinite(matrix)), matrix, 2.0 * pt.eye(size))
+    matrix = pt.switch(pt.all(~(pt.isnan(matrix) | pt.isinf(matrix))), matrix, 2.0 * pt.eye(size))
     radius = spectral_radius(matrix)
     pm.Potential("latent_stationarity", pt.switch(pt.lt(radius, 1.0), np.float64(0.0), np.float64(-np.inf)))
 
