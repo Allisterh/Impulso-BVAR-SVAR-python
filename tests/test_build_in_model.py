@@ -1304,7 +1304,7 @@ class TestLatentSeries:
         innovation scale (`_gentle_latent_volatility`). The latent own-lag
         prior mean is 0, set through `MinnesotaPrior(own_lag_mean=...)`: with
         the Minnesota mean of 1 this posterior presses against the
-        stationarity boundary and diverges heavily (issue 09c).
+        stationarity boundary and diverges heavily.
         `build_in_model` starts the latent own-lag inside the stationary
         region and keeps it there, so no `initvals` are passed. The check is
         that sampling runs, no chain freezes and divergences stay a small
@@ -1527,11 +1527,10 @@ class TestLatentOwnLagMeanAndInit:
         np.testing.assert_allclose(_prior_mu(model["B"]), _minnesota_b_mu(kwargs))
 
     @pytest.mark.xfail(strict=True, reason="issue 09e")
-    def test_latent_own_lag_mean_is_no_longer_accepted(self, rng):
-        import pymc as pm
+    def test_latent_own_lag_mean_is_no_longer_accepted(self):
+        import inspect
 
-        with pm.Model(), pytest.raises(TypeError, match="latent_own_lag_mean"):
-            VAR(lags=2).build_in_model(**_two_latent_setup(rng), latent_own_lag_mean=0.0)
+        assert "latent_own_lag_mean" not in inspect.signature(VAR.build_in_model).parameters
 
     @pytest.mark.xfail(strict=True, reason="issue 09e")
     def test_wrong_length_own_lag_mean_raises(self, rng):
