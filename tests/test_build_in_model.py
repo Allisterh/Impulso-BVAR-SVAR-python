@@ -1635,7 +1635,6 @@ class TestLatentStationarity:
         B0 = model.initial_point(random_seed=0)["B"]
         assert self._potential(model, B0) == 0.0
 
-        # Observed equations do not enter the constraint.
         observed_explosive = B0.copy()
         observed_explosive[n_latent, n_latent] = 1.5
         assert self._potential(model, observed_explosive) == 0.0
