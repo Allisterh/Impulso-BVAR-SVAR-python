@@ -1107,6 +1107,13 @@ def _gentle_latent_volatility():
     )
 
 
+def _stationary_latent_prior():
+    """Minnesota prior with own-lag mean 0 for the latent `b` and 1 for the observed `y`."""
+    from impulso.priors import MinnesotaPrior
+
+    return MinnesotaPrior(own_lag_mean=(0.0, 1.0))  # ty: ignore[pydantic-discarded-extra-argument]
+
+
 def _assert_no_frozen_chain(idata) -> None:
     """Fail if any chain froze on the latent own-lag (`B[0, 0]`) of a one-latent VAR(1).
 
@@ -1288,14 +1295,16 @@ class TestLatentSeries:
         np.testing.assert_allclose(np.ravel(logp), stats.norm(0, 3.0).logpdf([0.4, -1.2]))
 
     @pytest.mark.slow
+    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("seed", [1, 2, 3])
     def test_small_latent_var_samples(self, seed):
         """One latent and one observed series, simulated from a stationary VAR(1).
 
         The setup is gentle: a weak loading and a tight prior on the latent
         innovation scale (`_gentle_latent_volatility`). The latent own-lag
-        prior mean is 0: with the Minnesota mean of 1 this posterior presses
-        against the stationarity boundary and diverges heavily (issue 09c).
+        prior mean is 0, set through `MinnesotaPrior(own_lag_mean=...)`: with
+        the Minnesota mean of 1 this posterior presses against the
+        stationarity boundary and diverges heavily (issue 09c).
         `build_in_model` starts the latent own-lag inside the stationary
         region and keeps it there, so no `initvals` are passed. The check is
         that sampling runs, no chain freezes and divergences stay a small
@@ -1307,7 +1316,7 @@ class TestLatentSeries:
         volatility = _gentle_latent_volatility()
         draws, chains = 200, 2
         with pm.Model():
-            VAR(lags=1, volatility=volatility).build_in_model(
+            VAR(lags=1, volatility=volatility, prior=_stationary_latent_prior()).build_in_model(
                 endog=full[:, 1:],
                 exog=None,
                 n_lags=1,
@@ -1316,7 +1325,6 @@ class TestLatentSeries:
                 latent_names=["b"],
                 latent_init_sigma=0.5,
                 intercept_equations=["y"],
-                latent_own_lag_mean=0.0,
             )
             idata = pm.sample(
                 draws=draws,
@@ -1491,21 +1499,25 @@ def _prior_mu(rv) -> np.ndarray:
 
 
 class TestLatentOwnLagMeanAndInit:
-    """`latent_own_lag_mean` and the stationary initial point for latent equations (issue 09c)."""
+    """`MinnesotaPrior(own_lag_mean=...)` on the latent path, and the stationary initial point for latent equations."""
 
-    @pytest.mark.parametrize(("own_lag_mean", "expected"), [(0.0, [0.0, 0.0]), ([0.0, 0.3], [0.0, 0.3])])
-    def test_own_lag_mean_applies_to_latent_rows_only(self, rng, own_lag_mean, expected):
+    @pytest.mark.xfail(strict=True, reason="issue 09e")
+    @pytest.mark.parametrize("own_lag_mean", [0.0, (0.0, 0.3, 1.0, 0.5)])
+    def test_prior_own_lag_mean_reaches_B(self, rng, own_lag_mean):
         import pymc as pm
 
+        from impulso.priors import MinnesotaPrior
+
         kwargs = _two_latent_setup(rng)
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)  # ty: ignore[pydantic-discarded-extra-argument]
         with pm.Model() as model:
-            VAR(lags=2).build_in_model(**kwargs, latent_own_lag_mean=own_lag_mean)
+            VAR(lags=2, prior=prior).build_in_model(**kwargs)
 
         want = _minnesota_b_mu(kwargs)
-        want[0, 0], want[1, 1] = expected
+        want[np.arange(4), np.arange(4)] = own_lag_mean
         np.testing.assert_allclose(_prior_mu(model["B"]), want)
 
-    def test_default_own_lag_mean_keeps_the_minnesota_mean(self, rng):
+    def test_default_prior_keeps_the_minnesota_mean(self, rng):
         import pymc as pm
 
         kwargs = _two_latent_setup(rng)
@@ -1513,6 +1525,23 @@ class TestLatentOwnLagMeanAndInit:
             VAR(lags=2).build_in_model(**kwargs)
 
         np.testing.assert_allclose(_prior_mu(model["B"]), _minnesota_b_mu(kwargs))
+
+    @pytest.mark.xfail(strict=True, reason="issue 09e")
+    def test_latent_own_lag_mean_is_no_longer_accepted(self, rng):
+        import pymc as pm
+
+        with pm.Model(), pytest.raises(TypeError, match="latent_own_lag_mean"):
+            VAR(lags=2).build_in_model(**_two_latent_setup(rng), latent_own_lag_mean=0.0)
+
+    @pytest.mark.xfail(strict=True, reason="issue 09e")
+    def test_wrong_length_own_lag_mean_raises(self, rng):
+        import pymc as pm
+
+        from impulso.priors import MinnesotaPrior
+
+        prior = MinnesotaPrior(own_lag_mean=(0.0, 0.3))  # ty: ignore[pydantic-discarded-extra-argument]
+        with pm.Model(), pytest.raises(ValueError, match="own_lag_mean"):
+            VAR(lags=2, prior=prior).build_in_model(**_two_latent_setup(rng))
 
     @pytest.mark.parametrize("n_lags", [1, 2])
     def test_initial_point_puts_latent_rows_in_the_stationary_region(self, rng, n_lags):
@@ -1529,6 +1558,27 @@ class TestLatentOwnLagMeanAndInit:
         # Observed rows keep PyMC's default start, the prior mean.
         np.testing.assert_allclose(B0[2:], _minnesota_b_mu(kwargs)[2:])
 
+    @pytest.mark.xfail(strict=True, reason="issue 09e")
+    @pytest.mark.parametrize(
+        ("own_lag_mean", "start"),
+        [((0.0, 0.3, 1.0, 1.0), [0.0, 0.3]), ((-0.4, 1.5, 1.0, 1.0), [-0.4, 0.5]), ((-1.0, 0.9, 1.0, 1.0), [0.5, 0.9])],
+    )
+    def test_latent_own_lag_starts_at_a_stationary_prior_mean(self, rng, own_lag_mean, start):
+        import pymc as pm
+
+        from impulso.priors import MinnesotaPrior
+
+        kwargs = _two_latent_setup(rng)
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)  # ty: ignore[pydantic-discarded-extra-argument]
+        with pm.Model() as model:
+            VAR(lags=2, prior=prior).build_in_model(**kwargs)
+
+        B0 = model.initial_point(random_seed=0)["B"]
+        latent_rows = np.zeros((2, 8))
+        latent_rows[0, 0], latent_rows[1, 1] = start
+        np.testing.assert_array_equal(B0[:2], latent_rows)
+        np.testing.assert_allclose(B0[2:], _prior_mu(model["B"])[2:])
+
     def test_without_latent_series_the_initial_point_is_the_prior_mean(self, rng):
         import pymc as pm
 
@@ -1540,14 +1590,18 @@ class TestLatentOwnLagMeanAndInit:
 
         np.testing.assert_allclose(model.initial_point(random_seed=0)["B"], _minnesota_b_mu(kwargs))
 
-    @pytest.mark.parametrize(("own_lag_mean", "match"), [([0.0, 0.1, 0.2], "entries"), (np.nan, "finite")])
-    def test_bad_own_lag_mean_raises(self, rng, own_lag_mean, match):
-        import pymc as pm
+    @pytest.mark.xfail(strict=True, reason="issue 09e")
+    def test_fit_path_uses_the_prior_own_lag_mean(self, rng):
+        from impulso.priors import MinnesotaPrior
 
-        with pm.Model(), pytest.raises(ValueError, match=match):
-            VAR(lags=2).build_in_model(**_two_latent_setup(rng), latent_own_lag_mean=own_lag_mean)
+        data = _make_data(rng)
+        prior = MinnesotaPrior(own_lag_mean=0.4)  # ty: ignore[pydantic-discarded-extra-argument]
+        model, _ = VAR(lags=1, prior=prior)._build_pymc_model(data)
+
+        np.testing.assert_allclose(np.diag(_prior_mu(model["B"])), 0.4)
 
     @pytest.mark.slow
+    @pytest.mark.xfail(strict=True, reason="issue 09e")
     @pytest.mark.parametrize("seed", [1, 2, 3])
     def test_default_init_samples_with_own_lag_mean_zero(self, seed):
         """The 09b slow-test data with PyMC's defaults (`jitter+adapt_diag`
@@ -1559,7 +1613,7 @@ class TestLatentOwnLagMeanAndInit:
 
         draws, chains = 200, 2
         with pm.Model():
-            VAR(lags=1, volatility=_gentle_latent_volatility()).build_in_model(
+            VAR(lags=1, volatility=_gentle_latent_volatility(), prior=_stationary_latent_prior()).build_in_model(
                 endog=full[:, 1:],
                 exog=None,
                 n_lags=1,
@@ -1567,7 +1621,6 @@ class TestLatentOwnLagMeanAndInit:
                 endog_scales=[0.5, 0.3],
                 latent_names=["b"],
                 intercept_equations=["y"],
-                latent_own_lag_mean=0.0,
             )
             idata = pm.sample(
                 draws=draws,
