@@ -1205,8 +1205,6 @@ class VAR(ImpulsoBaseModel):
         error_dist = self.resolved_error_dist
         latent_names = tuple(latent_names)
         n_latent = len(latent_names)
-        # Reject options the embedded path (symbolic endog or latent series)
-        # cannot support before registering anything (issue 09d).
         _reject_unsupported_for_embedded_path(
             lags=self.lags,
             volatility=self.resolved_volatility,
