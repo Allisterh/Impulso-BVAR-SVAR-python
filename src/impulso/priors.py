@@ -124,7 +124,7 @@ class MinnesotaPrior(ImpulsoModel):
         # before this line runs, so sigma is guaranteed finite and strictly positive
         # here. A near-zero (but nonzero) sigma[c] still lands the ratio in the 1e12+
         # range; that is accepted by design, not guarded. See docs/adr/0015, the
-        # class docstring, and the Warning above (issue 07b).
+        # class docstring, and the Warning above.
         scale_ratio = sigma[:, np.newaxis] / sigma[col_var][np.newaxis, :]
 
         B_sigma = self.tightness * decay_per_col[np.newaxis, :] * cross_mask * scale_ratio
