@@ -175,7 +175,7 @@ def test_rejects_pymc_volatility():
     ids=["default", "custom"],
 )
 def test_niw_prior_round_trips_through_model_dump(prior):
-    """`ConjugateVAR.model_validate(spec.model_dump())` must equal `spec` (issue 09f)."""
+    """`ConjugateVAR.model_validate(spec.model_dump())` must equal `spec`."""
     spec = ConjugateVAR(lags=2, prior=prior)
     assert ConjugateVAR.model_validate(spec.model_dump()) == spec
     assert ConjugateVAR.model_validate(spec.model_dump(mode="json")) == spec

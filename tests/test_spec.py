@@ -1008,7 +1008,7 @@ class TestVolatilityShorthandSV:
 
 class TestVARSpecRoundTrip:
     """`VAR.model_validate(spec.model_dump())` must equal `spec`, in both dump
-    modes, for every prior/volatility/error-distribution combination (issue 09f).
+    modes, for every prior/volatility/error-distribution combination.
     """
 
     @pytest.mark.parametrize(
