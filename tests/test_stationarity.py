@@ -22,6 +22,7 @@ from impulso import (
     johansen_test,
     kpss_test,
 )
+from impulso._stationarity import _tuple_result
 
 pytest.importorskip("statsmodels")
 
@@ -392,7 +393,7 @@ def test_johansen_alpha_picks_the_matching_critical_value_column(cointegrated_fr
 def test_adf_statistic_matches_statsmodels_directly(unit_root_series):
     from statsmodels.tsa.stattools import adfuller
 
-    expected = adfuller(unit_root_series.to_numpy(), regression="c", autolag="aic")
+    expected = adfuller(unit_root_series.to_numpy(), regression="c", autolag="aic", **_tuple_result(adfuller))
     row = adf_test(unit_root_series).table.loc["rw"]
     assert row["statistic"] == pytest.approx(expected[0])
     assert row["pvalue"] == pytest.approx(expected[1])
@@ -404,7 +405,7 @@ def test_kpss_statistic_matches_statsmodels_directly(unit_root_series):
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        expected = sm_kpss(unit_root_series.to_numpy(), regression="c", nlags="auto")
+        expected = sm_kpss(unit_root_series.to_numpy(), regression="c", nlags="auto", **_tuple_result(sm_kpss))
     row = kpss_test(unit_root_series).table.loc["rw"]
     assert row["statistic"] == pytest.approx(expected[0])
     assert row["pvalue"] == pytest.approx(expected[1])
