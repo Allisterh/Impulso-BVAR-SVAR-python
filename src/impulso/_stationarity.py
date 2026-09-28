@@ -19,6 +19,7 @@ Kwiatkowski-Phillips-Schmidt-Shin (KPSS) tests disagree — and the modelling
 call is left to the analyst.
 """
 
+import inspect
 import warnings
 from collections.abc import Sequence
 from typing import Literal
@@ -65,6 +66,16 @@ def _kpss():
     from statsmodels.tsa.stattools import kpss
 
     return kpss, InterpolationWarning
+
+
+def _tuple_result(fn) -> dict:
+    """Ask a statsmodels test for its tuple result, where it takes the option.
+
+    From 0.15, `adfuller` and `kpss` emit a FutureWarning on every call that
+    leaves `result_object` unset; `False` keeps the tuple this module unpacks.
+    The 0.14 floor has no such parameter, so it is only passed when accepted.
+    """
+    return {"result_object": False} if "result_object" in inspect.signature(fn).parameters else {}
 
 
 def _coint_johansen():
@@ -157,6 +168,7 @@ def _adf_single(
         maxlag=max_lags,
         regression=regression,
         autolag=lag_selection,
+        **_tuple_result(adfuller),
     )
     reject = bool(pvalue < alpha)
     return {
@@ -195,7 +207,7 @@ def _kpss_single(
     kpss, interpolation_warning = _kpss()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        stat, pvalue, used_lag, crit = kpss(x, regression=regression, nlags=nlags)
+        stat, pvalue, used_lag, crit = kpss(x, regression=regression, nlags=nlags, **_tuple_result(kpss))
     bounded = any(issubclass(w.category, interpolation_warning) for w in caught)
     # The interpolation warning is the only one we absorb — it is reported as
     # `pvalue_bounded` instead. Anything else statsmodels raised is the
