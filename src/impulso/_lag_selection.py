@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 
+from impulso._design import build_lag_design_matrix
 from impulso.data import VARData
 from impulso.results import LagOrderResult
 
@@ -21,18 +22,15 @@ def select_lag_order(data: VARData, max_lags: int = 12) -> LagOrderResult:
         LagOrderResult with optimal lag orders and full criteria table.
     """
     y = data.endog
-    T, n = y.shape
+    n = y.shape[1]
 
     results = []
     for p in range(1, max_lags + 1):
-        # Build lagged regressor matrix
-        Y = y[p:]  # (T-p, n)
+        Y, x_lag, x_exog = build_lag_design_matrix(y, p, data.exog)
         T_eff = Y.shape[0]
-        X_parts = [np.ones((T_eff, 1))]  # intercept
-        for lag in range(1, p + 1):
-            X_parts.append(y[p - lag : T - lag])
-        if data.exog is not None:
-            X_parts.append(data.exog[p:])
+        X_parts = [np.ones((T_eff, 1)), x_lag]  # intercept + lag-major regressors
+        if x_exog is not None:
+            X_parts.append(x_exog)
         X = np.hstack(X_parts)  # (T_eff, 1 + n*p + k)
 
         # OLS

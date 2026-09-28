@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from impulso._design import build_lag_design_matrix
 from impulso._posterior import coefficient_draws, exog_coefficient_draws, has_exog_block, intercept_draws
 
 if TYPE_CHECKING:
@@ -45,16 +46,10 @@ def fitted_values(posterior: "xr.Dataset", data: "VARData", n_lags: int) -> np.n
     B_draws = coefficient_draws(posterior)  # (C, D, n, n*p)
     intercept_draws_arr = intercept_draws(posterior)  # (C, D, n)
 
-    y = data.endog  # (T, n)
-    T = y.shape[0]
-
-    x_lag = np.concatenate(
-        [y[n_lags - lag : T - lag] for lag in range(1, n_lags + 1)],
-        axis=1,
-    )  # (T-p, n*p)
+    _, x_lag, x_exog = build_lag_design_matrix(data.endog, n_lags, data.exog)
     y_hat = intercept_draws_arr[:, :, np.newaxis, :] + np.einsum("cdij,tj->cdti", B_draws, x_lag)
     if data.exog is not None and has_exog_block(posterior):
-        y_hat = y_hat + np.einsum("cdij,tj->cdti", exog_coefficient_draws(posterior), data.exog[n_lags:])
+        y_hat = y_hat + np.einsum("cdij,tj->cdti", exog_coefficient_draws(posterior), x_exog)
     return y_hat
 
 

@@ -1,11 +1,9 @@
 """Shared VAR design-matrix construction.
 
-Lag stacking — assembling the lag-major regressor block a VAR likelihood is
-built on — used to be implemented twice: once in `VAR`'s PyMC model builder
-and once in the conjugate sampler's design helper. `build_lag_design_matrix`
-is the single place that layout is decided, so the two estimators (and,
-eventually, a VAR embedded in another PyMC model with a latent endogenous
-block) cannot silently drift apart on lag order.
+`build_lag_design_matrix` is the single place lag-major regressor layout is
+decided, so every VAR estimator that stacks lags — the PyMC model builder,
+the conjugate sampler, lag-order selection, and residual reconstruction —
+shares one implementation and cannot silently drift apart on lag order.
 """
 
 from typing import TYPE_CHECKING
