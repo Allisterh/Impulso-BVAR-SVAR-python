@@ -7,7 +7,7 @@ worth addressing but belonging in separate issues).
 
 ## 1. Gather context
 
-- Read the project's `CLAUDE.md` (root and any directory-level files that share a
+- Read the project's `AGENTS.md` (root and any directory-level files that share a
   path with changed files) to understand coding standards and review policy.
 - Run `git diff origin/$BASE_REF...HEAD --name-only` to list changed files.
 - Run `git diff origin/$BASE_REF...HEAD` to inspect the full diff.
@@ -20,7 +20,7 @@ worth addressing but belonging in separate issues).
 A finding is **in-scope** if it meets ANY of the following:
 
 - It is a bug, logic error, or correctness issue introduced or exposed by this diff.
-- It violates a rule stated in `CLAUDE.md` and the violation is in a changed file/region.
+- It violates a rule stated in `AGENTS.md` and the violation is in a changed file/region.
 - It is a security concern in changed code (injection, auth, data exposure, etc.).
 - It is a missing or broken test for new/changed behaviour.
 - It is a naming, typing, or API-contract inconsistency introduced by this diff.
@@ -90,7 +90,7 @@ parsed by automation:
   from the content without further context.
 - If there are no in-scope findings, say so explicitly.
 - If there are no out-of-scope findings, omit that section entirely.
-- Do not comment on formatting or style unless it violates an explicit `CLAUDE.md` rule.
+- Do not comment on formatting or style unless it violates an explicit `AGENTS.md` rule.
 
 ## 4. Post the review
 
