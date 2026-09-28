@@ -39,6 +39,13 @@ updates:
     # Land the bump in uv.lock and only touch a floor if it genuinely excludes
     # the new release.
     versioning-strategy: "increase-if-necessary"
+    # Every tox-uv after 1.29 pulls in a tox that requires cachetools>=7, and
+    # PyMC 6 (through 6.3.x) pins cachetools<7, so no such bump can resolve. Each
+    # attempt fails the whole `python` group run. Lift this once a PyMC 6 release
+    # accepts cachetools 7: check with `uv lock --dry-run -P tox-uv==<latest>`.
+    ignore:
+      - dependency-name: "tox-uv"
+        versions: [">=1.30"]
     commit-message:
       prefix: "build"
       include: "scope"
