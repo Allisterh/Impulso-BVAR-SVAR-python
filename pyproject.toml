@@ -75,6 +75,7 @@ dev = [
     "tabulate>=0.10.0",
     "typing-extensions>=4.12",
     "ipython>=8.18",
+    "vulture>=2.16",
 ]
 docs = [
     "statsmodels>=0.14.6",
