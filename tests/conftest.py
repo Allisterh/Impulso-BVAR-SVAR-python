@@ -37,12 +37,6 @@ def endog_names():
 
 
 @pytest.fixture
-def var_data_3v(sample_endog, sample_index, endog_names):
-    """VARData with 3 endogenous variables, 100 obs."""
-    return VARData(endog=sample_endog, endog_names=endog_names, index=sample_index)
-
-
-@pytest.fixture
 def var_data_2v():
     """VAR(1) DGP with 2 endogenous variables, 200 obs.
 

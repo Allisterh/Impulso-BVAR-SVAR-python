@@ -919,8 +919,8 @@ class TestSymbolicEndog:
     def test_pmd_data_values_works(self, rng):
         """The contract pymc-marketing uses: `pmd.Data(...).values`, a plain
         `TensorVariable`, is accepted and matches the numpy path's logp."""
-        pmd = pytest.importorskip("pymc.dims")
         import pymc as pm
+        import pymc.dims as pmd
 
         from impulso import ar1_residual_sd
 
@@ -936,8 +936,8 @@ class TestSymbolicEndog:
         assert _model_logp(symbolic_model) == pytest.approx(_model_logp(numpy_model))
 
     def test_raw_xtensor_endog_raises_pointing_at_values(self, rng):
-        pmd = pytest.importorskip("pymc.dims")
         import pymc as pm
+        import pymc.dims as pmd
 
         data = _make_data(rng)
         with pm.Model(coords={"date": range(data.endog.shape[0]), "series": data.endog_names}):
