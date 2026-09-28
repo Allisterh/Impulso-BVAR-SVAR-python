@@ -42,7 +42,7 @@ class TestMinnesotaPrior:
         assert "B_sigma" in result
 
     def test_sigma_is_required(self):
-        """`sigma` has no default — a caller must always supply it (issue 07a)."""
+        """`sigma` has no default — a caller must always supply it."""
         prior = MinnesotaPrior()
         with pytest.raises(TypeError):
             prior.build_priors(n_vars=3, n_lags=2)  # ty: ignore[missing-argument]
@@ -56,8 +56,8 @@ class TestMinnesotaPrior:
 
 
 class TestMinnesotaPriorCrossLagScaling:
-    """Cross-lag prior sd scales by sigma_i/sigma_j; own lags are unchanged
-    (issue 07a). `build_priors` is a pure function of `sigma`, so these
+    """Cross-lag prior sd scales by sigma_i/sigma_j; own lags are unchanged.
+    `build_priors` is a pure function of `sigma`, so these
     properties are checked directly against varying `sigma` inputs rather
     than through a fitted model.
     """
@@ -181,7 +181,7 @@ class TestMinnesotaPriorCrossLagScaling:
 
 
 class TestMinnesotaPriorRejectsDegenerateSigma:
-    """`build_priors` validates a directly supplied `sigma` (issue 07b): a zero,
+    """`build_priors` validates a directly supplied `sigma`: a zero,
     negative, or non-finite entry would blow up the cross-lag ratio it feeds --
     collapsing that variable's own row and sending every other row's coefficient
     on its lag to inf, with the own-lag entry itself becoming 0.0 / 0.0 = nan.
@@ -207,3 +207,60 @@ class TestMinnesotaPriorRejectsDegenerateSigma:
         prior = MinnesotaPrior()
         result = prior.build_priors(n_vars=2, n_lags=1, sigma=np.array([1.0, 1e-15]))
         assert np.isfinite(result["B_sigma"]).all()
+
+
+class TestMinnesotaOwnLagMean:
+    """`own_lag_mean` is the per-variable prior mean on each own first lag."""
+
+    SIGMA = np.array([1.0, 2.0, 5.0])
+
+    def _build(self, prior: MinnesotaPrior, n_lags: int = 2) -> dict[str, np.ndarray]:
+        return prior.build_priors(n_vars=3, n_lags=n_lags, sigma=self.SIGMA)
+
+    def test_default_is_the_random_walk_mean(self):
+        B_mu = self._build(MinnesotaPrior())["B_mu"]
+        expected = np.zeros((3, 6))
+        expected[:, :3] = np.eye(3)
+        np.testing.assert_array_equal(B_mu, expected)
+
+    def test_explicit_default_matches_the_default(self):
+        default = self._build(MinnesotaPrior())
+        explicit = self._build(MinnesotaPrior(own_lag_mean=1.0))
+        np.testing.assert_array_equal(explicit["B_mu"], default["B_mu"])
+        np.testing.assert_array_equal(explicit["B_sigma"], default["B_sigma"])
+
+    @pytest.mark.parametrize(
+        ("own_lag_mean", "diagonal"),
+        [(0.0, [0.0, 0.0, 0.0]), (0.4, [0.4, 0.4, 0.4]), ((0.0, 1.0, 0.7), [0.0, 1.0, 0.7])],
+    )
+    def test_sets_only_the_own_first_lag(self, own_lag_mean, diagonal):
+        default = self._build(MinnesotaPrior())
+        result = self._build(MinnesotaPrior(own_lag_mean=own_lag_mean))
+        expected = default["B_mu"].copy()
+        expected[np.arange(3), np.arange(3)] = diagonal
+        np.testing.assert_array_equal(result["B_mu"], expected)
+        np.testing.assert_array_equal(result["B_sigma"], default["B_sigma"])
+
+    def test_list_is_accepted_as_a_sequence(self):
+        prior = MinnesotaPrior(own_lag_mean=[0.0, 0.5, 1.0])
+        np.testing.assert_array_equal(np.diag(self._build(prior)["B_mu"][:, :3]), [0.0, 0.5, 1.0])
+
+    @pytest.mark.parametrize("own_lag_mean", [(0.0, 1.0), (0.0, 1.0, 1.0, 1.0)])
+    def test_wrong_length_raises(self, own_lag_mean):
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)
+        with pytest.raises(ValueError, match="own_lag_mean"):
+            self._build(prior)
+
+    @pytest.mark.parametrize("own_lag_mean", [np.nan, np.inf, (0.0, -np.inf, 1.0)])
+    def test_non_finite_raises(self, own_lag_mean):
+        with pytest.raises(ValidationError, match="finite"):
+            MinnesotaPrior(own_lag_mean=own_lag_mean)
+
+    @pytest.mark.parametrize("own_lag_mean", [0.3, (0.0, 1.0, 0.7)])
+    def test_round_trips(self, own_lag_mean):
+        prior = MinnesotaPrior(tightness=0.2, own_lag_mean=own_lag_mean)
+        restored = MinnesotaPrior.model_validate(prior.model_dump())
+        assert restored == prior
+        assert restored.own_lag_mean == own_lag_mean
+        np.testing.assert_array_equal(self._build(restored)["B_mu"], self._build(prior)["B_mu"])
+        assert MinnesotaPrior.model_validate_json(prior.model_dump_json()) == prior

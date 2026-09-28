@@ -296,7 +296,7 @@ class TestFittedVarSigmaDispatch:
 
 
 class TestExogCoefficientRecovery:
-    """Regression for #192: B_exog must survive a small-scale regressor.
+    """B_exog must survive a small-scale regressor.
 
     The old prior was `Normal(0, 1)` in coefficient space regardless of the
     data. On this DGP the true coefficient is 50 (the regressor has sd 0.01,
@@ -365,7 +365,7 @@ class TestExogCoefficientRecovery:
 
 
 class TestErrorDistributionField:
-    """The `error_dist` field on FittedVAR (issue #152)."""
+    """The `error_dist` field on FittedVAR."""
 
     @pytest.fixture
     def gaussian_fitted(self, synthetic_idata_2v, var_data_2v):
@@ -492,7 +492,7 @@ class TestInnovationCovariance:
         `VAR` rejects `volatility="sv"` with `error_dist="student_t"` at spec
         level (ADR-0007), so the 5-dim branch is only reachable from a
         hand-built `FittedVAR` — but `innovation_covariance` documents and
-        handles the shape, so it is pinned here (issue #175).
+        handles the shape, so it is pinned here.
 
         The posterior is rigged so the answer is readable by eye: `R_chol` is
         the identity and `h = log(v)`, which makes `L_t = diag(exp(h_t / 2))`
@@ -521,7 +521,7 @@ class TestInnovationCovariance:
             # Placeholder: only the shape feeds `fitted.sigma()` below, which is
             # computed from the hand-rigged posterior (`h`, `R_chol`, `nu`), not
             # from `data.endog`. Must vary per column now that VARData rejects
-            # constant endog columns (issue 07b); an all-zero placeholder no
+            # constant endog columns; an all-zero placeholder no
             # longer qualifies.
             endog=np.arange((T + 1) * n_vars, dtype=float).reshape(T + 1, n_vars),
             endog_names=["y1", "y2"],

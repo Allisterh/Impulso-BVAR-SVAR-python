@@ -117,7 +117,7 @@ class TestVolatilityProcess:
 
 
 class TestPriorSignature:
-    """Locks in the `(n_vars, n_lags, *, sigma)` signature (issue 07a)."""
+    """Locks in the `(n_vars, n_lags, *, sigma)` signature."""
 
     def test_build_priors_takes_sigma_as_a_required_keyword(self):
         import inspect
@@ -150,7 +150,7 @@ class TestIdentificationSchemeNewSignature:
 
 
 class TestErrorDistribution:
-    """The observation-error seam's Protocol (issue #152)."""
+    """The observation-error seam's Protocol."""
 
     def test_is_runtime_checkable(self):
         from impulso.protocols import ErrorDistribution

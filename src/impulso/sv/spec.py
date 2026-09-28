@@ -6,7 +6,7 @@ import numpy as np
 
 from impulso._base import ImpulsoBaseModel
 from impulso.sv.data import SVData
-from impulso.sv.dynamics import SV_DYNAMICS_REGISTRY, SVDynamics
+from impulso.sv.dynamics import AR1, SV_DYNAMICS_REGISTRY, RandomWalk, SVDynamics
 from impulso.sv.priors import SVDefaultPrior, SVPrior
 
 if TYPE_CHECKING:
@@ -36,8 +36,11 @@ class StochasticVolatility(ImpulsoBaseModel):
 
     name: Literal["sv"] = "sv"
     is_time_varying: bool = True
-    dynamics: Literal["random_walk", "ar1"] | SVDynamics = "random_walk"
-    prior: Literal["default"] | SVPrior = "default"
+    # No explicit `Field(discriminator=...)`: see spec.py's `VAR.volatility` for why —
+    # this class is itself a discriminated-union variant there, and a discriminator on
+    # a nested field like this one trips a pydantic 2.0 bug in that configuration.
+    dynamics: Literal["random_walk", "ar1"] | RandomWalk | AR1 | SVDynamics = "random_walk"
+    prior: Literal["default"] | SVDefaultPrior | SVPrior = "default"
 
     @property
     def resolved_dynamics(self) -> SVDynamics:
@@ -291,7 +294,7 @@ class StochasticVolatility(ImpulsoBaseModel):
         the per-variable level ``v{i}_mu`` is added back on, because
         ``forecast_log_vol`` only extrapolates the level-free ``v{i}_h``.
         Omitting it scales every forecast standard deviation by
-        ``exp(-mu_i / 2)`` while leaving the in-sample fit untouched (#241).
+        ``exp(-mu_i / 2)`` while leaving the in-sample fit untouched.
 
         Args:
             posterior: Dataset with per-variable log-vol paths (`h`)

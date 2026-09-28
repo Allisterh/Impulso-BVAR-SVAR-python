@@ -1,4 +1,4 @@
-"""Tests for `VAR.build_in_model` (issues 08a, 08b, 09a, 09b, 09d).
+"""Tests for `VAR.build_in_model`.
 
 `VAR._build_pymc_model` becomes a thin wrapper: it opens a fresh
 `pymc.Model`, converts a `VARData` into arrays, and delegates to a new
@@ -11,20 +11,20 @@ model is active on entry. Several kinds of test live here:
   are not `xfail`-marked.
 * Tests of the new public method (`TestBuildInModel`) exercise
   `VAR.build_in_model` directly.
-* `TestInterceptEquations` (issue 08b) exercises the `intercept_equations`
+* `TestInterceptEquations` exercises the `intercept_equations`
   argument: which equations get an intercept term, the `var_intercept`
   coord that a strict subset needs, and the two edge cases (`None`/every
   name given -> today's behaviour unchanged; every name excluded -> no
   intercept variable at all).
-* `TestSymbolicEndog` (issue 09a) passes the observed endogenous block as a
+* `TestSymbolicEndog` passes the observed endogenous block as a
   symbolic tensor (`pytensor.shared` or `pm.Data`). The likelihood becomes a
   `pm.Potential` over `ErrorDistribution.logp`, and `endog_scales` is
   required because `ar1_residual_sd` needs concrete data.
-* `TestLatentSeries` (issue 09b) declares latent endogenous series via
+* `TestLatentSeries` declares latent endogenous series via
   `latent_names`. `build_in_model` generates their paths non-centred, from
   standard-normal innovations, and returns them; the observed block's
   likelihood is conditional on those innovations.
-* `TestEmbeddedPathRejections` (issue 09d) checks that a symbolic `endog`
+* `TestEmbeddedPathRejections` checks that a symbolic `endog`
   or latent series rejects string `lags`, non-`Constant` volatility and
   (latent series only) non-Gaussian errors before registering anything,
   and that the plain numpy path still supports all three.
@@ -114,7 +114,7 @@ class TestWrapperLogpParity:
 
 class TestLagDesignMatrixUsage:
     """`_build_pymc_model` (and, once it exists, `build_in_model`) must use
-    the shared `build_lag_design_matrix` from issue 02, not a private
+    the shared `build_lag_design_matrix`, not a private
     re-implementation of lag stacking. Not `xfail`-marked: the wrapper
     already routes through the shared builder on `main`.
     """
@@ -142,7 +142,7 @@ class TestLagDesignMatrixUsage:
 
 
 class TestBuildInModel:
-    """Direct tests of the new public `VAR.build_in_model` (issue 08a)."""
+    """Direct tests of the new public `VAR.build_in_model`."""
 
     def test_direct_call_matches_wrapper_logp(self, rng):
         """Calling `build_in_model` directly inside a fresh model gives the
@@ -381,7 +381,7 @@ class TestBuildInModel:
 
     def test_endog_scales_overrides_the_default_ar1_residual_sd(self, rng):
         """`endog_scales=None` computes sigma from the data; a caller-supplied
-        array is used as-is instead (issue 08a's `endog_scales` argument)."""
+        array is used as-is instead."""
         import pymc as pm
 
         from impulso.spec import _exog_prior_sigma
@@ -439,7 +439,7 @@ class TestBuildInModel:
 
     def test_endog_scales_are_validated(self, rng):
         """A caller-supplied scale gets the same zero/non-finite guard as the
-        data-derived one (issue 07b), naming the offending column."""
+        data-derived one, naming the offending column."""
         import pymc as pm
 
         data = _make_data(rng)
@@ -456,7 +456,7 @@ class TestBuildInModel:
 
     def test_endog_scales_validation_error_names_endog_scales_not_ar1_residual_sd(self, rng):
         """A bad caller-supplied `endog_scales` gets a message naming the actual
-        source; it must not blame `ar1_residual_sd`, which never ran (issue 08c)."""
+        source; it must not blame `ar1_residual_sd`, which never ran."""
         import pymc as pm
 
         data = _make_data(rng)
@@ -476,7 +476,7 @@ class TestBuildInModel:
 
     def test_endog_scales_as_a_list_of_the_right_length_is_accepted(self, rng):
         """A plain Python list, not just an ndarray, is coerced and accepted
-        when its length matches `n_vars` (issue 08c)."""
+        when its length matches `n_vars`."""
         import pymc as pm
 
         data = _make_data(rng)
@@ -495,7 +495,7 @@ class TestBuildInModel:
     def test_endog_scales_wrong_length_raises_a_clear_shape_error(self, rng):
         """`endog_scales` longer than `n_vars` raises a `ValueError` naming
         `endog_scales` and its shape, not an opaque `TypeError` from a raw
-        list hitting numpy comparisons downstream (issue 08c)."""
+        list hitting numpy comparisons downstream."""
         import pymc as pm
 
         data = _make_data(rng)
@@ -515,7 +515,7 @@ class TestBuildInModel:
 
 
 class TestInterceptEquations:
-    """`build_in_model(..., intercept_equations=...)` (issue 08b).
+    """`build_in_model(..., intercept_equations=...)`.
 
     `intercept_equations=None` (the default) means every equation gets an
     intercept — today's behaviour, unchanged. An explicit list restricts
@@ -744,7 +744,7 @@ class TestInterceptEquations:
 
     def test_default_none_matches_current_wrapper_logp(self, rng):
         """Acceptance criterion 1: omitting `intercept_equations` gives the
-        exact same log-probability as the pinned issue-08a wrapper values —
+        exact same log-probability as the pinned wrapper values —
         default behaviour is unchanged."""
         data = _make_data(rng)
         model, _ = VAR(lags=1)._build_pymc_model(data)
@@ -764,7 +764,7 @@ def _build(spec, endog, data, **kwargs):
 
 
 class TestSymbolicEndog:
-    """`build_in_model` with the observed endog block as a PyTensor variable (issue 09a)."""
+    """`build_in_model` with the observed endog block as a PyTensor variable."""
 
     def test_pm_data_endog_compiles(self, rng):
         import pymc as pm
@@ -1095,7 +1095,7 @@ def _gentle_latent_volatility():
     A latent series in a plain VAR has no data anchoring its scale (its
     innovation sd trades off against its loadings); with the default prior
     that ridge alone gives a few percent of divergences and slow mixing of
-    the latent scale (issue 09c report), whatever the own-lag does.
+    the latent scale, whatever the own-lag does.
     """
     from impulso.volatility import Constant, InnovationScalePrior
 
@@ -1105,6 +1105,13 @@ def _gentle_latent_volatility():
             InnovationScalePrior(family="halfnormal", scale=0.5),
         ]
     )
+
+
+def _stationary_latent_prior():
+    """Minnesota prior with own-lag mean 0 for the latent `b` and 1 for the observed `y`."""
+    from impulso.priors import MinnesotaPrior
+
+    return MinnesotaPrior(own_lag_mean=(0.0, 1.0))
 
 
 def _assert_no_frozen_chain(idata) -> None:
@@ -1130,7 +1137,7 @@ def _assert_no_frozen_chain(idata) -> None:
 
 
 class TestLatentSeries:
-    """`build_in_model(latent_names=...)`: non-centred latent series (issue 09b)."""
+    """`build_in_model(latent_names=...)`: non-centred latent series."""
 
     @pytest.mark.parametrize("symbolic", [False, True])
     def test_returned_path_matches_numpy_recursion(self, rng, symbolic):
@@ -1294,8 +1301,9 @@ class TestLatentSeries:
 
         The setup is gentle: a weak loading and a tight prior on the latent
         innovation scale (`_gentle_latent_volatility`). The latent own-lag
-        prior mean is 0: with the Minnesota mean of 1 this posterior presses
-        against the stationarity boundary and diverges heavily (issue 09c).
+        prior mean is 0, set through `MinnesotaPrior(own_lag_mean=...)`: with
+        the Minnesota mean of 1 this posterior presses against the
+        stationarity boundary and diverges heavily.
         `build_in_model` starts the latent own-lag inside the stationary
         region and keeps it there, so no `initvals` are passed. The check is
         that sampling runs, no chain freezes and divergences stay a small
@@ -1307,7 +1315,7 @@ class TestLatentSeries:
         volatility = _gentle_latent_volatility()
         draws, chains = 200, 2
         with pm.Model():
-            VAR(lags=1, volatility=volatility).build_in_model(
+            VAR(lags=1, volatility=volatility, prior=_stationary_latent_prior()).build_in_model(
                 endog=full[:, 1:],
                 exog=None,
                 n_lags=1,
@@ -1316,7 +1324,6 @@ class TestLatentSeries:
                 latent_names=["b"],
                 latent_init_sigma=0.5,
                 intercept_equations=["y"],
-                latent_own_lag_mean=0.0,
             )
             idata = pm.sample(
                 draws=draws,
@@ -1491,21 +1498,24 @@ def _prior_mu(rv) -> np.ndarray:
 
 
 class TestLatentOwnLagMeanAndInit:
-    """`latent_own_lag_mean` and the stationary initial point for latent equations (issue 09c)."""
+    """`MinnesotaPrior(own_lag_mean=...)` on the latent path, and the stationary initial point for latent equations."""
 
-    @pytest.mark.parametrize(("own_lag_mean", "expected"), [(0.0, [0.0, 0.0]), ([0.0, 0.3], [0.0, 0.3])])
-    def test_own_lag_mean_applies_to_latent_rows_only(self, rng, own_lag_mean, expected):
+    @pytest.mark.parametrize("own_lag_mean", [0.0, (0.0, 0.3, 1.0, 0.5)])
+    def test_prior_own_lag_mean_reaches_B(self, rng, own_lag_mean):
         import pymc as pm
 
+        from impulso.priors import MinnesotaPrior
+
         kwargs = _two_latent_setup(rng)
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)
         with pm.Model() as model:
-            VAR(lags=2).build_in_model(**kwargs, latent_own_lag_mean=own_lag_mean)
+            VAR(lags=2, prior=prior).build_in_model(**kwargs)
 
         want = _minnesota_b_mu(kwargs)
-        want[0, 0], want[1, 1] = expected
+        want[np.arange(4), np.arange(4)] = own_lag_mean
         np.testing.assert_allclose(_prior_mu(model["B"]), want)
 
-    def test_default_own_lag_mean_keeps_the_minnesota_mean(self, rng):
+    def test_default_prior_keeps_the_minnesota_mean(self, rng):
         import pymc as pm
 
         kwargs = _two_latent_setup(rng)
@@ -1513,6 +1523,20 @@ class TestLatentOwnLagMeanAndInit:
             VAR(lags=2).build_in_model(**kwargs)
 
         np.testing.assert_allclose(_prior_mu(model["B"]), _minnesota_b_mu(kwargs))
+
+    def test_latent_own_lag_mean_is_no_longer_accepted(self):
+        import inspect
+
+        assert "latent_own_lag_mean" not in inspect.signature(VAR.build_in_model).parameters
+
+    def test_wrong_length_own_lag_mean_raises(self, rng):
+        import pymc as pm
+
+        from impulso.priors import MinnesotaPrior
+
+        prior = MinnesotaPrior(own_lag_mean=(0.0, 0.3))
+        with pm.Model(), pytest.raises(ValueError, match="own_lag_mean"):
+            VAR(lags=2, prior=prior).build_in_model(**_two_latent_setup(rng))
 
     @pytest.mark.parametrize("n_lags", [1, 2])
     def test_initial_point_puts_latent_rows_in_the_stationary_region(self, rng, n_lags):
@@ -1529,6 +1553,26 @@ class TestLatentOwnLagMeanAndInit:
         # Observed rows keep PyMC's default start, the prior mean.
         np.testing.assert_allclose(B0[2:], _minnesota_b_mu(kwargs)[2:])
 
+    @pytest.mark.parametrize(
+        ("own_lag_mean", "start"),
+        [((0.0, 0.3, 1.0, 1.0), [0.0, 0.3]), ((-0.4, 1.5, 1.0, 1.0), [-0.4, 0.5]), ((-1.0, 0.9, 1.0, 1.0), [0.5, 0.9])],
+    )
+    def test_latent_own_lag_starts_at_a_stationary_prior_mean(self, rng, own_lag_mean, start):
+        import pymc as pm
+
+        from impulso.priors import MinnesotaPrior
+
+        kwargs = _two_latent_setup(rng)
+        prior = MinnesotaPrior(own_lag_mean=own_lag_mean)
+        with pm.Model() as model:
+            VAR(lags=2, prior=prior).build_in_model(**kwargs)
+
+        B0 = model.initial_point(random_seed=0)["B"]
+        latent_rows = np.zeros((2, 8))
+        latent_rows[0, 0], latent_rows[1, 1] = start
+        np.testing.assert_array_equal(B0[:2], latent_rows)
+        np.testing.assert_allclose(B0[2:], _prior_mu(model["B"])[2:])
+
     def test_without_latent_series_the_initial_point_is_the_prior_mean(self, rng):
         import pymc as pm
 
@@ -1540,12 +1584,14 @@ class TestLatentOwnLagMeanAndInit:
 
         np.testing.assert_allclose(model.initial_point(random_seed=0)["B"], _minnesota_b_mu(kwargs))
 
-    @pytest.mark.parametrize(("own_lag_mean", "match"), [([0.0, 0.1, 0.2], "entries"), (np.nan, "finite")])
-    def test_bad_own_lag_mean_raises(self, rng, own_lag_mean, match):
-        import pymc as pm
+    def test_fit_path_uses_the_prior_own_lag_mean(self, rng):
+        from impulso.priors import MinnesotaPrior
 
-        with pm.Model(), pytest.raises(ValueError, match=match):
-            VAR(lags=2).build_in_model(**_two_latent_setup(rng), latent_own_lag_mean=own_lag_mean)
+        data = _make_data(rng)
+        prior = MinnesotaPrior(own_lag_mean=0.4)
+        model, _ = VAR(lags=1, prior=prior)._build_pymc_model(data)
+
+        np.testing.assert_allclose(np.diag(_prior_mu(model["B"])), 0.4)
 
     @pytest.mark.slow
     @pytest.mark.parametrize("seed", [1, 2, 3])
@@ -1559,7 +1605,7 @@ class TestLatentOwnLagMeanAndInit:
 
         draws, chains = 200, 2
         with pm.Model():
-            VAR(lags=1, volatility=_gentle_latent_volatility()).build_in_model(
+            VAR(lags=1, volatility=_gentle_latent_volatility(), prior=_stationary_latent_prior()).build_in_model(
                 endog=full[:, 1:],
                 exog=None,
                 n_lags=1,
@@ -1567,7 +1613,6 @@ class TestLatentOwnLagMeanAndInit:
                 endog_scales=[0.5, 0.3],
                 latent_names=["b"],
                 intercept_equations=["y"],
-                latent_own_lag_mean=0.0,
             )
             idata = pm.sample(
                 draws=draws,
@@ -1612,7 +1657,7 @@ def _numpy_companion(B: np.ndarray, n_latent: int, n_vars: int, n_lags: int) -> 
 
 
 class TestLatentStationarity:
-    """The `latent_stationarity` Potential: -inf outside the stationary region of the latent block (issue 09c)."""
+    """The `latent_stationarity` Potential: -inf outside the stationary region of the latent block."""
 
     @staticmethod
     def _potential(model, B: np.ndarray) -> float:
@@ -1711,11 +1756,11 @@ class TestLatentStationarity:
 
 
 class TestEmbeddedPathRejections:
-    """`VAR.build_in_model` rejects options the embedded path cannot support (issue 09d).
+    """`VAR.build_in_model` rejects options the embedded path cannot support.
 
-    The embedded path is a symbolic `endog` (issue 09a) or latent series
-    (issue 09b): both condition the observed likelihood on generated or
-    graph values instead of concrete numpy data, so neither can run OLS.
+    The embedded path is a symbolic `endog` or latent series: both condition
+    the observed likelihood on generated or graph values instead of concrete
+    numpy data, so neither can run OLS.
     `lags` as a selection-criterion string and any non-`Constant`
     `volatility` both need OLS on data, so they are rejected in both cases.
     Latent series specifically also need Gaussian errors: the non-centred
@@ -1757,7 +1802,7 @@ class TestEmbeddedPathRejections:
         assert len(model.named_vars) == 0
 
     def test_student_t_with_latent_series_registers_nothing(self, rng):
-        """Rejected since issue 09b; this pins that nothing leaks into the model first."""
+        """Rejected on the embedded path; this pins that nothing leaks into the model first."""
         import pymc as pm
 
         with pm.Model() as model, pytest.raises(ValueError, match="Gaussian"):

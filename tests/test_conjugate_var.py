@@ -53,7 +53,7 @@ def test_no_break_fit_forecast_and_irf():
     assert post["B"].shape == (1, DRAWS, 2, 2)
     assert post["intercept"].shape == (1, DRAWS, 2)
     assert post["L"].shape == (1, DRAWS, 2, 2)
-    # Forecast-anchor stamp for volatility adapters (issue #120).
+    # Forecast-anchor stamp for volatility adapters.
     assert post.attrs["in_sample_length"] == 60 - 1
 
     forecast = fitted.forecast(steps=6, seed=0).idata.posterior_predictive["forecast"].values
@@ -98,7 +98,7 @@ def test_pandemic_break_fit_forecast_and_irf():
 
 
 def test_selected_tightness_stamps_metropolis_acceptance_rate():
-    """A fit with a free hyperparameter carries the Metropolis rate (issue #178)."""
+    """A fit with a free hyperparameter carries the Metropolis rate."""
     data = _synthetic_var_data(60, seed=4)
     model = ConjugateVAR(lags=1, prior=NIWPrior(select=True), draws=DRAWS, tune=DRAWS, seed=4)
 
@@ -141,7 +141,7 @@ def test_fixed_prior_fast_path_omits_metropolis_acceptance_rate():
 
 
 def test_rejects_exog_bearing_data():
-    """ConjugateVAR estimates endogenous dynamics only (issue #121)."""
+    """ConjugateVAR estimates endogenous dynamics only."""
     rng = np.random.default_rng(3)
     data = VARData(
         endog=rng.standard_normal((30, 2)),
@@ -165,11 +165,26 @@ def test_rejects_pymc_volatility():
         ConjugateVAR(lags=1, prior=NIWPrior(), volatility=Constant())
 
 
+@pytest.mark.parametrize(
+    "prior",
+    [
+        NIWPrior(),
+        NIWPrior(tightness=0.4, select=True, sum_of_coefficients=0.5, single_unit_root=0.2),
+    ],
+    ids=["default", "custom"],
+)
+def test_niw_prior_round_trips_through_model_dump(prior):
+    """`ConjugateVAR.model_validate(spec.model_dump())` must equal `spec`."""
+    spec = ConjugateVAR(lags=2, prior=prior)
+    assert ConjugateVAR.model_validate(spec.model_dump()) == spec
+    assert ConjugateVAR.model_validate(spec.model_dump(mode="json")) == spec
+
+
 class _NoHyperparameterBreak(ConjugateVolatility):
     """A well-formed adapter that declares nothing to estimate.
 
     Its ``log_scales`` would double every residual sd, but with no hyperparameter the
-    sampler takes the closed-form fast path and never calls it (issue #161).
+    sampler takes the closed-form fast path and never calls it.
     """
 
     name: Literal["no_hyperparameters"] = "no_hyperparameters"
@@ -182,7 +197,7 @@ class _NoHyperparameterBreak(ConjugateVolatility):
 
 
 def test_rejects_zero_hyperparameter_volatility():
-    """A break with nothing to estimate would be silently ignored (issue #161)."""
+    """A break with nothing to estimate would be silently ignored."""
     with pytest.raises(ValueError) as excinfo:
         ConjugateVAR(lags=1, prior=NIWPrior(), volatility=_NoHyperparameterBreak())
 
@@ -209,8 +224,8 @@ def test_accepts_pandemic_break_hyperparameters():
 
 
 def test_malformed_conjugate_posterior_raises(monkeypatch):
-    """ConjugateVAR.fit constructs its result through `FittedVAR.from_posterior`
-    (issue 04b), so a posterior that breaks the shared schema must raise, not
+    """ConjugateVAR.fit constructs its result through `FittedVAR.from_posterior`,
+    so a posterior that breaks the shared schema must raise, not
     silently return a `FittedVAR` that breaks on first use.
 
     Monkeypatches `select_and_sample` (the conjugate engine's own posterior

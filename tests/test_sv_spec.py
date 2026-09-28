@@ -159,7 +159,7 @@ class TestSVDynamicsDiscriminator:
 class TestHasExplicitLevel:
     """SVDynamics adapters expose whether they own the log-vol level (via an
     intercept like AR(1)'s alpha) so the multivariate SV adapter can avoid a
-    redundant outer mu_i shift (issue #66)."""
+    redundant outer mu_i shift."""
 
     def test_random_walk_has_no_explicit_level(self):
         from impulso.sv.dynamics import RandomWalk
@@ -284,7 +284,7 @@ class TestSVMultivariateBuild:
 
 class TestSVBuildPymcLatentDataValidation:
     """Multivariate SV cannot fit per-variable priors from nothing — `data`
-    is required (issue #65). The standalone univariate fit (StochasticVolatility.fit)
+    is required. The standalone univariate fit (StochasticVolatility.fit)
     is unaffected; it goes through _build_pymc_model, not build_pymc_latent."""
 
     def test_raises_when_data_is_none(self):
@@ -309,7 +309,7 @@ class TestSVBuildPymcLatentDataValidation:
 
 class TestSVMultivariatePerVariablePriors:
     """Each variable's priors come from its own residual column, not a shared
-    series (closes #65)."""
+    series."""
 
     def test_calls_build_priors_with_per_variable_slice(self, monkeypatch):
         import pymc as pm
@@ -339,8 +339,8 @@ class TestSVMultivariatePerVariablePriors:
 
 class TestSVMultivariateDynamicsAwareLevel:
     """When the dynamics owns the log-vol level (AR(1) via alpha), the
-    multivariate adapter must not also register a redundant outer mu_i
-    (closes #66)."""
+    multivariate adapter must not also register a redundant outer mu_i.
+    """
 
     def test_ar1_dynamics_skips_per_variable_mu(self):
         import pymc as pm

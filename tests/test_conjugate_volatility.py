@@ -161,7 +161,7 @@ def test_forecast_cholesky_path_legacy_fallback_warns(pandemic, posterior):
 
 
 def test_forecast_cholesky_path_anchors_at_sample_end(pandemic, posterior):
-    """With the attr stamped, the forecast joins the in-sample path continuously (#120)."""
+    """With the attr stamped, the forecast joins the in-sample path continuously."""
     import warnings as _warnings
 
     stamped = posterior.copy(deep=True)

@@ -1,4 +1,4 @@
-"""Tests for the prior- and posterior-predictive APIs (issue #56)."""
+"""Tests for the prior- and posterior-predictive APIs."""
 
 import subprocess
 import sys
@@ -179,7 +179,7 @@ class TestPriorPredictive:
         assert idata.prior["B_exog"].shape == (1, 10, 2, 1)
 
     def test_b_exog_draws_use_the_scale_adaptive_prior(self, var_data_2v_exog):
-        """The simulated `B_exog` spreads at `_exog_prior_sigma`, not at 1 (#192).
+        """The simulated `B_exog` spreads at `_exog_prior_sigma`, not at 1.
 
         `_build_pymc_model` owns the scaled exog prior, so the graph this
         method draws from is the graph `fit` samples. Were the scaling to

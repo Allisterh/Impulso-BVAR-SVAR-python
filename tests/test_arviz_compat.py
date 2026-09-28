@@ -1,6 +1,6 @@
 """Tests for the ArviZ 0.x / 1.x compatibility seam.
 
-Regression coverage for issue #273. These tests must pass unchanged on both
+Regression coverage. These tests must pass unchanged on both
 supported stacks (PyMC 5 + ArviZ 0 on Python 3.11, PyMC 6 + ArviZ 1 on
 Python >= 3.12), so they assert on the *normalised* behaviour rather than on
 one stack's container type — except where a test is explicitly parameterised
@@ -63,7 +63,7 @@ def test_import_impulso_does_not_trigger_the_migration_shim():
 
     On ArviZ 1 that attribute only survives behind a `MigrationWarning`-emitting
     shim. Evaluated `az.InferenceData` annotations therefore turn every
-    `import impulso` into a warning, which is how issue #273 first surfaced.
+    `import impulso` into a warning.
     Run in a subprocess so the check is unaffected by earlier imports.
     """
     if not ARVIZ_V1:

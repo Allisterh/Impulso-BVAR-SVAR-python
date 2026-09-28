@@ -301,7 +301,7 @@ def synthetic_sv_idata_2v():
     the level-free path and `v{i}_mu` a nonzero per-variable level. An
     earlier version of this fixture set `v{i}_h = h[..., i]` *and* a
     nonzero `v{i}_mu`, which asserts `mu_i == 0` — the exact assumption
-    the #241 forecast bug made, so every test built on it was blind to
+    the forecast bug made, so every test built on it was blind to
     the whole family of level bugs.
     """
     rng = np.random.default_rng(0)

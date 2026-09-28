@@ -345,7 +345,7 @@ class TestGuards:
 
 
 class TestNaNShockMatrixGuard:
-    """#187: NaN draws are named, not left to LAPACK or to silent NaN output."""
+    """NaN draws are named, not left to LAPACK or to silent NaN output."""
 
     def test_nan_draws_error_before_the_inverse(self, identified_long_run_nan_draws):
         with (
@@ -412,7 +412,7 @@ class TestPlot:
 
 
 class TestHeavyTailedErrorsAreExactlyInvariant:
-    """counterfactual and historical_decomposition need no t guard (issue #152).
+    """counterfactual and historical_decomposition need no t guard.
 
     Both back out realised structural shocks as `eps = P^-1 u` and
     re-propagate `P eps`, so rescaling `P -> cP` cancels exactly. The

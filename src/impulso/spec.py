@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -50,7 +50,7 @@ def _validate_sigma_is_usable(
     *,
     source: Literal["ar1_residual_sd", "endog_scales"] = "ar1_residual_sd",
 ) -> None:
-    """Reject a per-variable scale that would break every prior dividing by it (issue 07b).
+    """Reject a per-variable scale that would break every prior dividing by it.
 
     `sigma` (`ar1_residual_sd(endog)`, or the caller's `endog_scales`) is resolved
     once in `VAR.build_in_model` and shared by `Prior.build_priors` — whose
@@ -73,7 +73,7 @@ def _validate_sigma_is_usable(
     `source` only changes the wording of the error: `sigma` reaches this function
     either computed from the data (`ar1_residual_sd`) or supplied directly by the
     caller (`endog_scales`), and a message blaming `ar1_residual_sd` for a bad
-    `endog_scales` is simply wrong — that function never ran (issue 08c).
+    `endog_scales` is simply wrong — that function never ran.
 
     Args:
         sigma: Per-variable scale, shape `(n_vars,)` — `ar1_residual_sd(endog)`,
@@ -116,7 +116,7 @@ def _resolve_sigma(
     endog_names: Sequence[str],
     n_vars: int,
 ) -> np.ndarray:
-    """Resolve and validate `VAR.build_in_model`'s shared `sigma` (issue 08c).
+    """Resolve and validate `VAR.build_in_model`'s shared `sigma`.
 
     `endog_scales=None` computes `sigma` from `endog` via `ar1_residual_sd`.
     Otherwise the caller's array is coerced with `np.asarray(..., dtype=float)`
@@ -139,7 +139,7 @@ def _resolve_sigma(
     Raises:
         ValueError: If `endog_scales` does not have shape `(n_vars,)`.
         ValueError: If any entry of the resolved `sigma` is zero, negative or
-            non-finite (issue 07b).
+            non-finite.
     """
     # Lazy: `_conjugate` imports scipy at module level, and `spec` is on the
     # package import path.
@@ -181,7 +181,7 @@ def _symbolic_endog_n_vars(
     endog_scales: np.ndarray | Sequence[float] | None,
     endog_names: Sequence[str],
 ) -> int:
-    """Validate a symbolic `endog` for `VAR.build_in_model` and return `n_vars` (issue 09a).
+    """Validate a symbolic `endog` for `VAR.build_in_model` and return `n_vars`.
 
     A symbolic `endog` (e.g. a `pm.Data` container the caller owns) cannot go
     through the numpy-only steps: `ar1_residual_sd`, the OLS pre-fit
@@ -215,7 +215,7 @@ def _check_latent_endog_shape(
     exog: np.ndarray | None,
     observed_names: Sequence[str],
 ) -> None:
-    """Check the observed `endog` and `exog` shapes on the latent-series path (issue 09b).
+    """Check the observed `endog` and `exog` shapes on the latent-series path.
 
     Raises:
         TypeError: If `endog` is a dimmed `XTensorVariable`.
@@ -253,14 +253,14 @@ def _reject_unsupported_for_embedded_path(
     symbolic: bool,
     n_latent: int,
 ) -> None:
-    """Reject spec options the embedded path cannot support, before any variable is registered (issue 09d).
+    """Reject spec options the embedded path cannot support, before any variable is registered.
 
     `build_in_model`'s plain numpy path — concrete `endog`, no latent series
     — can run OLS on the data to pick a lag order and to seed stochastic-
     volatility priors, and its likelihood can be any `ErrorDistribution`. The
-    embedded path drops each of those: a symbolic `endog` (issue 09a) has no
+    embedded path drops each of those: a symbolic `endog` has no
     concrete values to run OLS on at graph-build time, and a latent series
-    (issue 09b) has none at all — it is generated inside the model. This
+    has none at all — it is generated inside the model. This
     runs first in `build_in_model`, before `_latent_n_vars`/
     `_symbolic_endog_n_vars` or any `pm.Normal`/`add_coords` call, so a spec
     these options would misconfigure never leaves a partially-built model
@@ -321,7 +321,7 @@ def _latent_n_vars(
     endog_scales: np.ndarray | Sequence[float] | None,
     latent_names: Sequence[str],
 ) -> int:
-    """Validate `VAR.build_in_model`'s latent-series inputs and return `n_vars` (issue 09b).
+    """Validate `VAR.build_in_model`'s latent-series inputs and return `n_vars`.
 
     With latent series, `endog_names` is the full VAR order and `endog` holds
     only the observed columns, which follow the latent ones. `n_vars` is
@@ -329,7 +329,7 @@ def _latent_n_vars(
 
     The error-distribution check that used to live here (a latent series
     needs Gaussian errors) is now `_reject_unsupported_for_embedded_path`,
-    which runs before this function and raises the same way (issue 09d).
+    which runs before this function and raises the same way.
 
     Raises:
         TypeError: If `endog` is a dimmed `XTensorVariable`.
@@ -379,30 +379,21 @@ def _latent_init_sigma(latent_init_sigma: float | Sequence[float], n_latent: int
     return sigma
 
 
-def _latent_own_lag_mean(latent_own_lag_mean: float | Sequence[float], n_latent: int) -> np.ndarray:
-    """Coerce `latent_own_lag_mean` to a finite array of shape `(n_latent,)`."""
-    mean = np.asarray(latent_own_lag_mean, dtype=float)
-    if mean.ndim == 0:
-        mean = np.full(n_latent, float(mean))
-    if mean.shape != (n_latent,):
-        raise ValueError(f"latent_own_lag_mean must be a scalar or have {n_latent} entries, got shape {mean.shape}")
-    if not np.all(np.isfinite(mean)):
-        raise ValueError(f"latent_own_lag_mean must be finite, got {mean.tolist()}")
-    return mean
-
-
 def _latent_b_initval(b_mu: np.ndarray, n_latent: int) -> np.ndarray:
     """Initial value for `B`: latent rows inside the stationary region, observed rows at the prior mean.
 
-    A latent equation starts with own first lag 0.5 and every other
-    coefficient 0. PyMC takes an initial value for the whole of `B`, so the
-    observed rows get their prior mean, which is PyMC's default start for a
-    `Normal` anyway.
+    A latent equation's own first lag starts at its prior mean when that is
+    inside the stationary region (`|mean| < 1`) and at 0.5 otherwise; every
+    other coefficient in the latent rows starts at 0. PyMC takes an initial
+    value for the whole of `B`, so the observed rows get their prior mean,
+    which is PyMC's default start for a `Normal` anyway.
     """
-    initval = np.array(b_mu, dtype=float)
-    initval[:n_latent] = 0.0
+    b_mu = np.asarray(b_mu, dtype=float)
     idx = np.arange(n_latent)
-    initval[idx, idx] = 0.5
+    own_lag_mean = b_mu[idx, idx]
+    initval = b_mu.copy()
+    initval[:n_latent] = 0.0
+    initval[idx, idx] = np.where(np.abs(own_lag_mean) < 1.0, own_lag_mean, 0.5)
     return initval
 
 
@@ -485,7 +476,7 @@ def _latent_path(
     L: "pt.TensorVariable",
     init_sigma: np.ndarray,
 ) -> "tuple[pt.TensorVariable, pt.TensorVariable]":
-    """Register and generate the latent series non-centred (issue 09b).
+    """Register and generate the latent series non-centred.
 
     Registers `latent_init`, a `Normal(0, init_sigma)` prior on each latent
     series' first `n_lags` values, shape `(n_lags, n_latent)`, and
@@ -630,7 +621,7 @@ def _intercept_mask(endog_names: Sequence[str], intercept_equations: Sequence[st
 
 
 def _register_intercept(intercept_mask: np.ndarray) -> "tuple[pt.TensorVariable | None, pt.TensorVariable]":
-    """Register `VAR.build_in_model`'s intercept (issue 08b).
+    """Register `VAR.build_in_model`'s intercept.
 
     Returns:
         Tuple `(intercept, intercept_term)`: the free variable (`None` when
@@ -832,10 +823,17 @@ class VAR(ImpulsoBaseModel):
 
     lags: int | Literal["aic", "bic", "hq"] = Field(...)
     max_lags: int | None = None
-    prior: Literal["minnesota"] | Prior = "minnesota"
-    volatility: Literal["constant", "sv"] | PyMCVolatilityProcess = "constant"
+    # Concrete adapters are listed ahead of the bare protocol so a dict (from
+    # model_dump) is validated against a concrete schema instead of falling through
+    # to the protocol arm, which only accepts an already-built instance. No explicit
+    # `Field(discriminator=...)`: each adapter's own `name: Literal[...]` already
+    # disambiguates a dict under pydantic's default union validation, and a
+    # discriminator here trips a pydantic 2.0 bug when the tagged union's variant
+    # (StochasticVolatility) itself has a discriminated field (dynamics/prior).
+    prior: Literal["minnesota"] | MinnesotaPrior | Prior = "minnesota"
+    volatility: Literal["constant", "sv"] | Constant | StochasticVolatility | PyMCVolatilityProcess = "constant"
     exog_prior_scale: float = Field(100.0, gt=0)
-    error_dist: Literal["gaussian", "student_t"] | ErrorDistribution = "gaussian"
+    error_dist: Literal["gaussian", "student_t"] | Gaussian | StudentT | ErrorDistribution = "gaussian"
 
     @model_validator(mode="after")
     def _validate_spec(self) -> Self:
@@ -866,14 +864,18 @@ class VAR(ImpulsoBaseModel):
         """Resolve string volatility shorthand to a PyMCVolatilityProcess instance."""
         if isinstance(self.volatility, str):
             return _VOLATILITY_REGISTRY[self.volatility]()
-        return self.volatility
+        # `Constant`/`StochasticVolatility` are frozen, so their `name`/`is_time_varying`
+        # fields cannot satisfy the protocol's plain (writable) attributes under ty's
+        # invariance check, even though nothing ever writes to them.
+        return cast(PyMCVolatilityProcess, self.volatility)
 
     @property
     def resolved_error_dist(self) -> ErrorDistribution:
         """Resolve string error-distribution shorthand to an ErrorDistribution instance."""
         if isinstance(self.error_dist, str):
             return _ERROR_DIST_REGISTRY[self.error_dist]()
-        return self.error_dist
+        # See resolved_volatility: same frozen-field/protocol-invariance mismatch.
+        return cast(ErrorDistribution, self.error_dist)
 
     @staticmethod
     def _default_sampler() -> Sampler:
@@ -981,7 +983,6 @@ class VAR(ImpulsoBaseModel):
         intercept_equations: Sequence[str] | None = None,
         latent_names: Sequence[str] = (),
         latent_init_sigma: float | Sequence[float] = 1.0,
-        latent_own_lag_mean: float | Sequence[float] = 1.0,
     ) -> VARModelHandles:
         """Register this VAR specification into the active PyMC model.
 
@@ -1037,7 +1038,7 @@ class VAR(ImpulsoBaseModel):
         registered for them. `latent_init_sigma` sets only the start of the
         path; the VAR is the latent series' only prior after that.
 
-        Latent stationarity (issue 09c): an explosive draw of the latent
+        Latent stationarity: an explosive draw of the latent
         equations' coefficients makes the generated path explode over the
         sample and can freeze a chain. Three things guard against it. The
         `pm.Potential` `"latent_stationarity"` is 0 when the spectral radius
@@ -1048,12 +1049,13 @@ class VAR(ImpulsoBaseModel):
         `Normal`, so the posterior is its prior truncated to the stationary
         region of the latent block; with a latent own-lag prior mean near 1
         the posterior can press against that boundary and give divergences.
-        `latent_own_lag_mean` replaces the Minnesota prior mean of each
-        latent equation's own first-lag coefficient: the default of 1
-        (random walk) keeps the Minnesota prior, and a caller modelling a
-        stationary deviation passes 0. And the model's initial point puts
-        every latent equation inside the stationary region: own first lag
-        0.5, every other coefficient in the latent rows 0. PyMC sets an
+        The prior sets that mean: `MinnesotaPrior(own_lag_mean=...)` takes
+        one entry per series, so a caller modelling a stationary deviation
+        passes 0 for the latent series and 1 for the random-walk observed
+        ones. And the model's initial point puts every latent equation
+        inside the stationary region: own first lag at its prior mean when
+        that is inside the region, otherwise 0.5, and every other
+        coefficient in the latent rows 0. PyMC sets an
         initial value for `B` as a whole, so the observed rows start at
         their prior mean, which is PyMC's default start for them anyway.
         PyMC's `jitter+adapt_diag` start moves this by up to +-1; a jittered
@@ -1149,12 +1151,6 @@ class VAR(ImpulsoBaseModel):
                 prior on each latent series' first `n_lags` values: a scalar
                 shared by every latent series, or one entry per latent
                 series. Ignored without latent series.
-            latent_own_lag_mean: Prior mean of each latent equation's own
-                first-lag coefficient, replacing the Minnesota mean: a scalar
-                shared by every latent series, or one entry per latent
-                series. The default of 1 leaves the Minnesota prior as it is;
-                pass 0 for a stationary deviation. Observed equations always
-                keep the prior's mean. Ignored without latent series.
 
         Returns:
             `VARModelHandles` wrapping the intercept, coefficient,
@@ -1166,27 +1162,25 @@ class VAR(ImpulsoBaseModel):
                 of likelihood rows (`T - n_lags`) — see "Time coordinate"
                 above.
             ValueError: If any entry of the scale — computed or supplied via
-                `endog_scales` — is zero, negative or non-finite (issue 07b).
-            ValueError: If `endog_scales` does not have shape `(n_vars,)`
-                (issue 08c).
+                `endog_scales` — is zero, negative or non-finite.
+            ValueError: If `endog_scales` does not have shape `(n_vars,)`.
             TypeError: If `endog` is a dimmed `XTensorVariable` rather than a
-                plain tensor — pass its `.values` (issue 09a).
+                plain tensor — pass its `.values`.
             ValueError: If `endog` is symbolic and `endog_scales` is `None`,
                 if it is not 2-D, or if its static column count differs
-                from `len(endog_names)` (issue 09a).
+                from `len(endog_names)`.
             ValueError: If `intercept_equations` names an equation not in
                 `endog_names`, or names one more than once.
-            ValueError: With latent series (issue 09b): if `endog_names`
+            ValueError: With latent series: if `endog_names`
                 does not start with exactly `latent_names`, if no observed
                 series is left, if `endog`'s column count is not the number
                 of observed series, if `exog` has a different number of
                 rows from `endog`, if `endog_scales` is missing or has
-                entries for the observed series only, if `latent_init_sigma`
-                has the wrong length or a non-positive entry, or if
-                `latent_own_lag_mean` has the wrong length or a non-finite
-                entry (issue 09c).
+                entries for the observed series only, or if
+                `latent_init_sigma` has the wrong length or a non-positive
+                entry.
             ValueError: On the embedded path — `endog` symbolic or latent
-                series present (issue 09d): if `self.lags` is a selection
+                series present: if `self.lags` is a selection
                 criterion string (lag selection runs OLS on data), or if
                 `self.volatility` is not `"constant"`/`Constant` (stochastic
                 volatility seeds its priors from OLS residuals). With latent
@@ -1215,7 +1209,6 @@ class VAR(ImpulsoBaseModel):
         if n_latent:
             n_vars = _latent_n_vars(endog, exog, endog_names, endog_scales, latent_names)
             init_sigma = _latent_init_sigma(latent_init_sigma, n_latent)
-            own_lag_mean = _latent_own_lag_mean(latent_own_lag_mean, n_latent)
         else:
             n_vars = _symbolic_endog_n_vars(endog, endog_scales, endog_names) if symbolic else endog.shape[1]
         # With latent series the observed block is conditioned on
@@ -1237,10 +1230,6 @@ class VAR(ImpulsoBaseModel):
         # exogenous block is needed before then.
         if n_latent:
             X_exog = exog[n_lags:] if exog is not None else None
-            # `coeff` is lag-major, so lag 1 of series `i` is column `i`.
-            B_mu = np.array(prior_params["B_mu"], dtype=float)
-            B_mu[np.arange(n_latent), np.arange(n_latent)] = own_lag_mean
-            prior_params = {**prior_params, "B_mu": B_mu}
         else:
             Y, X_lag, X_exog = build_lag_design_matrix(endog, n_lags, exog)
 

@@ -1,4 +1,4 @@
-"""Tests for the shared lag design-matrix builder (issue 02).
+"""Tests for the shared lag design-matrix builder.
 
 Gates:
 

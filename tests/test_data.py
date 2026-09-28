@@ -56,7 +56,7 @@ class TestVARDataValidation:
     @pytest.mark.parametrize("bad_val", [np.nan, np.inf, -np.inf])
     def test_rejects_nonfinite(self, sample_index, endog_names, bad_val, rng):
         # Varying, not `np.full`: a constant column would now be caught by the
-        # endog-variation check (issue 07b) before this test's NaN/Inf column
+        # endog-variation check before this test's NaN/Inf column
         # ever gets a chance to fire the message under test.
         bad = rng.standard_normal((100, 3))
         bad[0, 2] = bad_val
@@ -102,7 +102,7 @@ class TestVARDataValidation:
 
 
 class TestVARDataExogVariation:
-    """Exactly-constant exog columns are collinear with the intercept (#192)."""
+    """Exactly-constant exog columns are collinear with the intercept."""
 
     @pytest.mark.parametrize("fill", [1.0, 0.0, -3.5])
     def test_rejects_constant_exog_column(self, sample_endog, sample_index, endog_names, fill):
@@ -177,7 +177,7 @@ class TestVARDataExogVariation:
 class TestVARDataEndogVariation:
     """Exactly-constant endog columns are structurally degenerate for any VAR
     estimator, and collapse `MinnesotaPrior`'s cross-lag scaling once it keys off
-    each column's AR(1) residual sd, sigma_i/sigma_j (docs/adr/0015, issue 07b).
+    each column's AR(1) residual sd, sigma_i/sigma_j (docs/adr/0015).
     """
 
     @pytest.mark.parametrize("fill", [1.0, 0.0, -3.5])

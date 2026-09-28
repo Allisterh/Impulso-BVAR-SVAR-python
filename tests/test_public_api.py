@@ -104,7 +104,7 @@ class TestPublicAPI:
         assert callable(enable_runtime_checks)
 
     def test_predictive_methods_are_public(self):
-        """The predictive checks are methods on the pipeline objects (#56)."""
+        """The predictive checks are methods on the pipeline objects."""
         import impulso
 
         assert callable(impulso.VAR.prior_predictive)
@@ -237,7 +237,7 @@ class TestErrorDistributionPublicAPI:
 
 
 class TestAr1ResidualSdPublicAPI:
-    """`ar1_residual_sd` is importable from the public namespace (issue 03)."""
+    """`ar1_residual_sd` is importable from the public namespace."""
 
     def test_ar1_residual_sd_importable_from_impulso(self):
         from impulso import ar1_residual_sd

@@ -488,7 +488,7 @@ class TestResultSurface:
 
 
 class TestHeavyTailedErrorsRejected:
-    """conditional_forecast is Gaussian-only (issue #152).
+    """conditional_forecast is Gaussian-only.
 
     The Waggoner-Zha constrained draw *is* the Gaussian conditional-law
     formula and the plausibility statistic's chi-squared reference assumes

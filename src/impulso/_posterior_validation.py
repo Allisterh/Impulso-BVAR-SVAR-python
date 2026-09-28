@@ -9,7 +9,7 @@ cholesky_at` reading `L`, `StochasticVolatility.cholesky_at` reading `h` and
 (`impulso.observation._nu_draws`). Both callers get that schema for free
 from the code that builds their posterior. `FittedVAR.from_posterior` is a
 *public* seam for a posterior estimated elsewhere — by a future Impulso
-estimator or by pymc-marketing's embedded VAR — so unlike those two callers
+estimator or by an embedding caller — so unlike those two callers
 it cannot trust the shape it receives. This module is that trust boundary.
 
 Every check names the offending variable and the layout expected, so a
@@ -146,7 +146,7 @@ def _explicit_string_labels(da: xr.DataArray, dim: str) -> list[str] | None:
     with no entry in `.coords` at all. `VAR.fit` registers every dim through
     `pm.Model(coords=...)`, so its labels are real strings. Only the latter
     is checked — a hand-built posterior is free to leave labels off and be
-    trusted positionally, per the resolved ambiguity in issue 04a.
+    trusted positionally.
     """
     if dim not in da.coords:
         return None

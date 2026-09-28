@@ -105,7 +105,7 @@ class FittedVAR(ImpulsoBaseModel):
         `posterior` group against the schema `VAR.fit` and `ConjugateVAR.fit`
         both produce — see `impulso._posterior_validation` — before
         constructing. Both estimators construct their result through this
-        method (issue 04b), so a posterior that breaks the schema now raises
+        method, so a posterior that breaks the schema now raises
         here instead of silently producing a malformed `FittedVAR`.
 
         Args:
