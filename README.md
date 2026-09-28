@@ -117,7 +117,7 @@ Full documentation, tutorials, and API reference: [https://thomaspinder.github.i
 
 ## Development
 
-See [CLAUDE.md](CLAUDE.md) for development setup, testing, and contribution guidelines.
+See [AGENTS.md](AGENTS.md) for development setup, testing, and contribution guidelines.
 
 ## License
 

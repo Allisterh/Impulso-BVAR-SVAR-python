@@ -327,9 +327,8 @@ def _latent_n_vars(
     only the observed columns, which follow the latent ones. `n_vars` is
     therefore `len(endog_names)`, not `endog`'s column count.
 
-    The error-distribution check that used to live here (a latent series
-    needs Gaussian errors) is now `_reject_unsupported_for_embedded_path`,
-    which runs before this function and raises the same way.
+    The error-distribution check (a latent series needs Gaussian errors) is
+    `_reject_unsupported_for_embedded_path`, which runs before this function.
 
     Raises:
         TypeError: If `endog` is a dimmed `XTensorVariable`.

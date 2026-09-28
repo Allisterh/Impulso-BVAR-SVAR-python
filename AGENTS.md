@@ -1,10 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents working in this repository.
 
 ## Project Overview
 
-Impulso is a Python library for Bayesian Vector Autoregression (VAR). Early stage (v0.0.12), requires Python >=3.11.
+Impulso is a Python library for Bayesian Vector Autoregression (VAR). Early stage, requires Python >=3.11.
 
 ## Commands
 
@@ -50,7 +50,7 @@ uv run tox
 
 - **Source**: `src/impulso/` — library code, built as a wheel via Hatchling
 - **Tests**: `tests/` — pytest with `--cov`, 90% coverage target (codecov.yaml)
-- **Docs**: `docs/` — Sphinx + MyST-NB with the shibuya theme (`docs/conf.py`). Tutorials are jupytext py:percent notebooks (`docs/tutorials/*.py`, read via `nb_custom_formats`); the API reference is autodoc/autosummary from docstrings. Link-preview (Open Graph) tags come from sphinxext-opengraph; a page opts into a custom `og:image` via MyST front matter in its first markdown cell.
+- **Docs**: `docs/` — Sphinx + MyST-NB (`docs/conf.py`), tutorials as executable **jupytext `py:percent` `.py` notebooks** (read via `nb_custom_formats`), prose/reference pages as MyST `.md`. Docstrings auto-rendered via Sphinx `autosummary` (summary tables + per-object pages generated under `docs/reference/generated/`, gitignored; custom stub templates in `docs/_templates/autosummary/` emit MyST) + `napoleon`. `sphinx-codeautolink` links API names in tutorial code to the reference; `sphinxcontrib-bibtex` powers `{cite}` (bib in `docs/references.bib`); `sphinx-sitemap` emits `sitemap.xml`; `numfig` + labelled `$$…$$ (label)` equations cross-referenced with `` {eq}`label` ``. Link-preview (Open Graph) tags come from `sphinxext-opengraph`; a page opts into a custom `og:image` via a `meta` directive in its first markdown cell. Notebooks execute at build via jupyter-cache; no outputs are committed. Theme: `shibuya`. Tutorial `.py` files are excluded from ruff (they are notebooks, not library code).
 
 ### Core Pipeline
 
@@ -98,19 +98,17 @@ All domain models inherit from one of these. Use `object.__setattr__` only for i
 - **Package manager**: uv (lock file must stay in sync — `uv lock --locked`)
 - **Linter/Formatter**: Ruff — line length 120, target py311, auto-fix enabled
 - **Type checker**: ty (configured for `.venv`, Python 3.11). Ignores `unresolved-attribute`, `not-subscriptable`, and `invalid-argument-type` due to ArviZ/PyMC/pandas dynamic attrs.
-- **Prek**: Ruff checks + standard hooks (trailing whitespace, TOML/YAML/JSON validation)
-- **CI**: GitHub Actions runs quality, tests (3.11–3.14), dependency-floor legs, wheel install, and docs checks on push/PR. Notebook outputs are NOT committed: MyST-NB executes notebooks at build time with `nb_execution_mode = "cache"` (jupyter-cache keyed on cell source), and CI restores `docs/_build/.jupyter_cache*` across runs. PR builds are strict smoke renders (`IMPULSO_DOCS_CI=1`, tiny MCMC, `-W`); the main-branch deploy path builds full-fidelity with `IMPULSO_DOCS_RESILIENT=1` so one broken notebook cannot block the site. Smoke and full renders use separate cache dirs, and every build stamps `render-mode.txt` at the site root.
+- **Prek**: Ruff checks, vulture (dead-code check, `[tool.vulture]` + `vulture_whitelist.py`), and standard hooks (trailing whitespace, TOML/YAML/JSON validation)
+- **CI**: GitHub Actions (`main.yml`) runs on push/PR: `quality` (prek + `uv lock --locked` + `ty check`), `tests-and-type-check` (3.11–3.14 matrix, `-m "not slow"`, Codecov uploaded from the 3.11 and 3.12 legs only — one leg per PyMC/ArviZ family, merged into a single report), `lowest-direct-deps` and `arviz-1-2-compat` (dependency-floor and ArviZ `>=1.2,<2` legs), `wheel-install` (builds the wheel, installs it into a clean environment), and `build-docs` (smoke-renders on PRs with `IMPULSO_DOCS_CI=1`, full-renders with real MCMC on push to `main` with `IMPULSO_DOCS_RESILIENT=1`, restoring the jupyter-cache between runs so one broken notebook cannot block the site). The `@pytest.mark.slow` MCMC suite runs separately via `slow-tests.yml` (3.11/3.12 legs, weekly schedule, `workflow_dispatch`, and push to `main`). Notebook outputs are NOT committed — notebooks execute at build time. A scheduled/on-release full render runs via `full-render-notebooks.yml`. Tutorials read `IMPULSO_DOCS_CI` (smoke draws) and Sphinx sets `IMPULSO_DOCS_BUILD=1` (disables the sampler progress bar).
 
 ## Test Fixtures (`conftest.py`)
 
 Shared fixtures available in all test files:
 
 - **`rng`**: Deterministic `np.random.default_rng(42)`.
-- **`var_data_3v`**: 3 endogenous variables, 100 obs (random).
 - **`var_data_2v`**: 2-var VAR(1) DGP, 200 obs (stable coefficients).
 - **`var_data_3v_dgp2`**: 3-var VAR(2) DGP, 200 obs.
 - **`synthetic_idata_2v`**: Synthetic `InferenceData` mimicking a fitted 2-var VAR(1) — no MCMC needed. Use for fast tests of post-fitting logic.
-- **`synthetic_identified_idata_2v`**: Same plus `structural_shock_matrix` (Cholesky of Sigma).
 
 ## Code Conventions
 
@@ -118,6 +116,10 @@ Shared fixtures available in all test files:
 - `assert` is allowed in tests (`S101` ignored for `tests/*`)
 - `E501` (line length), `E731` (lambda assignment), and `TRY003` (long exception messages) are globally ignored
 - Docstrings follow Google style (Args/Returns sections)
+- Docstring inline code uses **single backticks** (Markdown-native — the
+  autosummary stub templates render docstrings as MyST): write `` `Foo.bar` ``,
+  not `` ``Foo.bar`` ``. Cross-references are plain text — no RST `:meth:` /
+  `:class:` directives.
 
 ## PyMC / Sampling Gotchas
 
@@ -151,3 +153,17 @@ Format out-of-scope items as complete issue drafts with title, labels, context,
 problem description, suggested approach, and affected files.
 
 Use the `/pr-review` command for the full review workflow.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues at `thomaspinder/Impulso`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical defaults — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
