@@ -52,9 +52,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://thomaspinder.github.io/Impulso/"
+Homepage = "https://impulso.quantclimate.com/"
 Repository = "https://github.com/QuantClimate/Impulso"
-Documentation = "https://thomaspinder.github.io/Impulso/"
+Documentation = "https://impulso.quantclimate.com/"
 
 [project.optional-dependencies]
 nutpie = ["nutpie>=0.13"]

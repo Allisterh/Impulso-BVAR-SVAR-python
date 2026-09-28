@@ -127,7 +127,10 @@ intersphinx_mapping = {
 # -- HTML output -------------------------------------------------------------
 html_theme = "shibuya"
 html_title = "impulso"
-html_baseurl = "https://thomaspinder.github.io/Impulso/"  # for sitemap + canonical
+# Sitemap, canonical link and og:url (via ogp_site_url) all derive from this, so
+# it must match the custom domain set in the repo's Pages settings. The og:image
+# in tutorials/proxy-svar.py is written out in full and must match it too.
+html_baseurl = "https://impulso.quantclimate.com/"
 sitemap_url_scheme = "{link}"
 
 # -- Open Graph link previews (sphinxext-opengraph) ---------------------------
@@ -138,7 +141,7 @@ sitemap_url_scheme = "{link}"
 # through `{eval-rst}` (the escape hatch myst-parser itself recommends):
 #     ```{eval-rst}
 #     .. meta::
-#        :property=og:image: https://thomaspinder.github.io/Impulso/_static/<name>.png
+#        :property=og:image: https://impulso.quantclimate.com/_static/<name>.png
 #     ```
 # The image itself is written by the notebook into `stylesheets/` (the
 # html_static_path dir) and committed, so the URL stays valid even when a

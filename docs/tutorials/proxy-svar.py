@@ -16,7 +16,7 @@
 # %% [markdown]
 # ```{eval-rst}
 # .. meta::
-#    :property=og:image: https://thomaspinder.github.io/Impulso/_static/proxy-svar-card.png
+#    :property=og:image: https://impulso.quantclimate.com/_static/proxy-svar-card.png
 #    :property=og:image:alt: Posterior median and 68% band of the month-by-month impact of a one-standard-deviation oil supply news shock on the real oil price, 1974-2017.
 #    :property=og:image:width: 2400
 #    :property=og:image:height: 1260
