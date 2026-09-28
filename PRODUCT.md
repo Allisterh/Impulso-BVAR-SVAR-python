@@ -47,7 +47,7 @@ producing forecasts, impulse responses, and decompositions for research and inst
 work.
 
 The docs surface: Sphinx + MyST-NB, Diátaxis layout (tutorials / how-to / explanation / reference),
-`shibuya` theme, hosted at https://thomaspinder.github.io/Impulso/. Tutorials are jupytext
+`shibuya` theme, hosted at https://impulso.quantclimate.com/. Tutorials are jupytext
 `py:percent` notebooks executed at build time via jupyter-cache; no rendered outputs are committed.
 CI smoke-renders docs on PRs (`IMPULSO_DOCS_CI=1`) and full-renders with real MCMC on push to
 `main`. Docs figures use qc_core's ledger plotting style (adopted repo-wide, commit 8c9e66b) — an
