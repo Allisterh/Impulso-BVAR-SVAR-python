@@ -1,9 +1,8 @@
 """StochasticVolatility model specification."""
 
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-from pydantic import Field
 
 from impulso._base import ImpulsoBaseModel
 from impulso.sv.data import SVData
@@ -37,9 +36,10 @@ class StochasticVolatility(ImpulsoBaseModel):
 
     name: Literal["sv"] = "sv"
     is_time_varying: bool = True
-    dynamics: Literal["random_walk", "ar1"] | Annotated[RandomWalk | AR1, Field(discriminator="name")] | SVDynamics = (
-        "random_walk"
-    )
+    # No explicit `Field(discriminator=...)`: see spec.py's `VAR.volatility` for why —
+    # this class is itself a discriminated-union variant there, and a discriminator on
+    # a nested field like this one trips a pydantic 2.0 bug in that configuration.
+    dynamics: Literal["random_walk", "ar1"] | RandomWalk | AR1 | SVDynamics = "random_walk"
     prior: Literal["default"] | SVDefaultPrior | SVPrior = "default"
 
     @property

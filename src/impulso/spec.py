@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Any, Literal, Self, cast
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import numpy as np
 from pydantic import Field, model_validator
@@ -823,21 +823,17 @@ class VAR(ImpulsoBaseModel):
 
     lags: int | Literal["aic", "bic", "hq"] = Field(...)
     max_lags: int | None = None
-    # `MinnesotaPrior` is listed ahead of the bare `Prior` protocol so a dict (from
-    # model_dump) is validated against its concrete schema instead of falling through
-    # to the protocol arm, which only accepts an already-built instance.
+    # Concrete adapters are listed ahead of the bare protocol so a dict (from
+    # model_dump) is validated against a concrete schema instead of falling through
+    # to the protocol arm, which only accepts an already-built instance. No explicit
+    # `Field(discriminator=...)`: each adapter's own `name: Literal[...]` already
+    # disambiguates a dict under pydantic's default union validation, and a
+    # discriminator here trips a pydantic 2.0 bug when the tagged union's variant
+    # (StochasticVolatility) itself has a discriminated field (dynamics/prior).
     prior: Literal["minnesota"] | MinnesotaPrior | Prior = "minnesota"
-    volatility: (
-        Literal["constant", "sv"]
-        | Annotated[Constant | StochasticVolatility, Field(discriminator="name")]
-        | PyMCVolatilityProcess
-    ) = "constant"
+    volatility: Literal["constant", "sv"] | Constant | StochasticVolatility | PyMCVolatilityProcess = "constant"
     exog_prior_scale: float = Field(100.0, gt=0)
-    error_dist: (
-        Literal["gaussian", "student_t"]
-        | Annotated[Gaussian | StudentT, Field(discriminator="name")]
-        | ErrorDistribution
-    ) = "gaussian"
+    error_dist: Literal["gaussian", "student_t"] | Gaussian | StudentT | ErrorDistribution = "gaussian"
 
     @model_validator(mode="after")
     def _validate_spec(self) -> Self:
