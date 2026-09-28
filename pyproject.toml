@@ -101,7 +101,7 @@ build-backend = "hatchling.build"
 packages = ["src/impulso"]
 
 [tool.ty.src]
-exclude = ["docs/**"]
+exclude = ["docs/**", "vulture_whitelist.py"]
 
 [tool.ty.environment]
 python = "./.venv"
@@ -193,6 +193,9 @@ ignore = [
 "tests/*" = ["S101"]
 # Sphinx requires a module-level `copyright` variable (shadows a builtin).
 "docs/conf.py" = ["A001"]
+# Bare names/expressions are vulture's whitelist idiom, not dead code or
+# undefined names.
+"vulture_whitelist.py" = ["B018", "F821"]
 
 [tool.ruff.format]
 preview = true
@@ -203,3 +206,17 @@ skip_empty = true
 [tool.coverage.run]
 branch = true
 source = ["src"]
+
+[tool.vulture]
+paths = ["src", "vulture_whitelist.py"]
+min_confidence = 60
+sort_by_size = true
+# Pydantic invokes validators by decorator, never by name.
+ignore_decorators = ["@field_validator", "@model_validator"]
+ignore_names = [
+    "model_config",   # pydantic class config
+    "__getattr__",    # PEP 562 lazy exports in impulso/__init__.py
+    "__dir__",        # PEP 562 dir() for lazy exports
+    "writeable",      # ndarray.flags.writeable = False (array freeze)
+    "output_grads",   # PyTensor OpFromGraph pullback/lop_overrides callback signature
+]
