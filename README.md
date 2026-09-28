@@ -1,10 +1,10 @@
 # Impulso
 
-[![Release](https://img.shields.io/github/v/release/thomaspinder/impulso)](https://img.shields.io/github/v/release/thomaspinder/impulso)
-[![Build status](https://img.shields.io/github/actions/workflow/status/thomaspinder/impulso/main.yml?branch=main)](https://github.com/thomaspinder/impulso/actions/workflows/main.yml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/thomaspinder/impulso/branch/main/graph/badge.svg)](https://codecov.io/gh/thomaspinder/impulso)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/thomaspinder/impulso)](https://img.shields.io/github/commit-activity/m/thomaspinder/impulso)
-[![License](https://img.shields.io/github/license/thomaspinder/impulso)](https://img.shields.io/github/license/thomaspinder/impulso)
+[![Release](https://img.shields.io/github/v/release/QuantClimate/Impulso)](https://img.shields.io/github/v/release/QuantClimate/Impulso)
+[![Build status](https://img.shields.io/github/actions/workflow/status/QuantClimate/Impulso/main.yml?branch=main)](https://github.com/QuantClimate/Impulso/actions/workflows/main.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/QuantClimate/Impulso/branch/main/graph/badge.svg)](https://codecov.io/gh/QuantClimate/Impulso)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/QuantClimate/Impulso)](https://img.shields.io/github/commit-activity/m/QuantClimate/Impulso)
+[![License](https://img.shields.io/github/license/QuantClimate/Impulso)](https://img.shields.io/github/license/QuantClimate/Impulso)
 
 Bayesian Vector Autoregression (VAR) in Python.
 
@@ -130,6 +130,6 @@ If you use impulso in your research, please cite:
   author = {Pinder, Thomas},
   title = {impulso: Bayesian Vector Autoregression in Python},
   year = {2026},
-  url = {https://github.com/thomaspinder/impulso}
+  url = {https://github.com/QuantClimate/Impulso}
 }
 ```

@@ -158,7 +158,7 @@ Use the `/pr-review` command for the full review workflow.
 
 ### Issue tracker
 
-GitHub Issues at `thomaspinder/Impulso`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub Issues at `QuantClimate/Impulso`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

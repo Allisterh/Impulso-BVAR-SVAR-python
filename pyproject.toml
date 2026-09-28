@@ -53,7 +53,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://thomaspinder.github.io/Impulso/"
-Repository = "https://github.com/thomaspinder/impulso"
+Repository = "https://github.com/QuantClimate/Impulso"
 Documentation = "https://thomaspinder.github.io/Impulso/"
 
 [project.optional-dependencies]

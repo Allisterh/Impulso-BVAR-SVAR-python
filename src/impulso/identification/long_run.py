@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 # Arbitrary (non-recursive) long-run zero patterns need the Arias-Rubio-
 # Ramirez-Waggoner machinery; `LongRunRestriction` points users here.
-_NONRECURSIVE_ISSUE = "https://github.com/thomaspinder/Impulso/issues/144"
+_NONRECURSIVE_ISSUE = "https://github.com/QuantClimate/Impulso/issues/144"
 
 
 def _companion_spectral_radius(A: list[np.ndarray]) -> np.ndarray:
