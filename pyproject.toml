@@ -193,8 +193,6 @@ ignore = [
 "tests/*" = ["S101"]
 # Sphinx requires a module-level `copyright` variable (shadows a builtin).
 "docs/conf.py" = ["A001"]
-# One-shot migration tool: invokes the quarto/jupytext CLIs by name.
-"scripts/qmd_to_myst.py" = ["S603", "S607"]
 
 [tool.ruff.format]
 preview = true
