@@ -114,6 +114,29 @@ def var_data_2v_correlated():
 
 
 @pytest.fixture
+def var_data_2v_vol_shift():
+    """`var_data_2v`'s DGP, but the shock scale steps from 0.1 to 0.4 halfway.
+
+    `var_data_2v` is homoskedastic, so a stochastic-volatility fit has almost
+    no per-t variation in Sigma_t to track. The replicate-spread correlation
+    then sat near 0.47, around its 0.4 bar, and flipped with runner-level
+    numerics. With a real volatility shift it sits near 0.96, while a pooled
+    covariance still scores near 0.
+    """
+    rng = np.random.default_rng(42)
+    T, n = 200, 2
+    y = np.zeros((T, n))
+    for t in range(1, T):
+        scale = 0.1 if t < T // 2 else 0.4
+        y[t] = 0.5 * y[t - 1] + rng.standard_normal(n) * scale
+    return VARData(
+        endog=y,
+        endog_names=["y1", "y2"],
+        index=pd.date_range("2000-01-01", periods=T, freq="QS"),
+    )
+
+
+@pytest.fixture
 def fitted_2v(synthetic_idata_2v, var_data_2v):
     """FittedVAR over the synthetic 2-var posterior — no MCMC."""
     return FittedVAR(
@@ -453,7 +476,7 @@ class TestPredictiveAgainstPyMC:
         assert covered.mean() >= 0.85
 
     @pytest.mark.slow
-    def test_stochastic_volatility_innovations_vary_with_t(self, var_data_2v):
+    def test_stochastic_volatility_innovations_vary_with_t(self, var_data_2v_vol_shift):
         """Under SV the replicate spread must track the model's own Sigma_t.
 
         This is the assertion behind the volatility-seam deviation: the
@@ -467,14 +490,14 @@ class TestPredictiveAgainstPyMC:
         sampler = NUTSSampler(
             draws=30, tune=30, chains=1, cores=1, random_seed=0, progressbar=False, nuts_sampler="pymc"
         )
-        fitted = VAR(lags=1, volatility=StochasticVolatility()).fit(var_data_2v, sampler=sampler)
+        fitted = VAR(lags=1, volatility=StochasticVolatility()).fit(var_data_2v_vol_shift, sampler=sampler)
 
         ppc = fitted.posterior_predictive(seed=0).posterior_predictive["obs"].values
         assert np.isfinite(ppc).all()
 
         posterior = fitted.idata.posterior
-        T = var_data_2v.endog.shape[0] - 1
-        mu = fitted_values(posterior, var_data_2v, 1)
+        T = var_data_2v_vol_shift.endog.shape[0] - 1
+        mu = fitted_values(posterior, var_data_2v_vol_shift, 1)
         empirical_sd = (ppc - mu).std(axis=(0, 1))  # (T, n)
 
         L_path = fitted.volatility.cholesky_path(posterior, T=T)  # (C, D, T, n, n)
