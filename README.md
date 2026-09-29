@@ -1,15 +1,15 @@
 # Impulso
 
-[![Release](https://img.shields.io/github/v/release/QuantClimate/Impulso)](https://img.shields.io/github/v/release/QuantClimate/Impulso)
+[![Release](https://img.shields.io/github/v/release/QuantClimate/Impulso)](https://github.com/QuantClimate/Impulso/releases)
 [![Build status](https://img.shields.io/github/actions/workflow/status/QuantClimate/Impulso/main.yml?branch=main)](https://github.com/QuantClimate/Impulso/actions/workflows/main.yml?query=branch%3Amain)
 [![codecov](https://codecov.io/gh/QuantClimate/Impulso/branch/main/graph/badge.svg)](https://codecov.io/gh/QuantClimate/Impulso)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/QuantClimate/Impulso)](https://img.shields.io/github/commit-activity/m/QuantClimate/Impulso)
-[![License](https://img.shields.io/github/license/QuantClimate/Impulso)](https://img.shields.io/github/license/QuantClimate/Impulso)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/QuantClimate/Impulso)](https://github.com/QuantClimate/Impulso/commits/main)
+[![License](https://img.shields.io/github/license/QuantClimate/Impulso)](https://github.com/QuantClimate/Impulso/blob/main/LICENSE)
 
 Bayesian Vector Autoregression (VAR) in Python.
 
 <section class="consulting-cta">
-    <p>We currently have some <strong>availability for consulting</strong> on how Bayesian modelling, vector autoregressions, and impulso can be integrated into your team's macroeconomic and financial forecasting work. If this sounds relevant, <a href="https://calendly.com/hello-1761-izqw/15-minute-meeting-clone-1">book an introductory call</a>. These calls are for consulting inquiries only. For technical usage questions and free community support, please use GitHub Discussions and the documentation.</p>
+    <p>We currently have some <strong>availability for consulting</strong> on how Bayesian modelling, vector autoregressions, and impulso can be integrated into your team's macroeconomic and financial forecasting work. If this sounds relevant, <a href="https://calendly.com/hello-1761-izqw/15-minute-meeting-clone-1">book an introductory call</a>. These calls are for consulting inquiries only. For technical usage questions and free community support, please use <a href="https://github.com/QuantClimate/Impulso/issues">GitHub Issues</a> and the documentation.</p>
 </section>
 
 ## Overview
