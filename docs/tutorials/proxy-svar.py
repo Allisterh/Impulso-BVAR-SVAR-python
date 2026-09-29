@@ -10,7 +10,6 @@
 #     display_name: Python 3
 #     language: python
 #     name: python3
-#     path: /Users/thomaspinder/Library/Jupyter/kernels/python3
 # ---
 
 # %% [markdown]
