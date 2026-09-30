@@ -396,6 +396,19 @@ def _latent_b_initval(b_mu: np.ndarray, n_latent: int) -> np.ndarray:
     return initval
 
 
+def _set_latent_b_initval(model: Any, B: Any, b_mu: np.ndarray, n_latent: int) -> None:
+    """Start `B` at `_latent_b_initval`, registering an initial value only when that is not the prior mean.
+
+    The prior mean is PyMC's default start for a `Normal`. PyMC cannot copy a
+    model with a non-default initial value (`Model.copy()`, `pm.do`,
+    `pm.observe`), so a redundant one would only make the host model
+    unclonable.
+    """
+    initval = _latent_b_initval(b_mu, n_latent)
+    if not np.array_equal(initval, b_mu):
+        model.set_initval(B, initval)
+
+
 def _latent_companion(B: Any, n_latent: int, n_vars: int, n_lags: int) -> "pt.TensorVariable":
     """Companion matrix of the latent-on-latent block of `B`, shape `(n_latent * n_lags, n_latent * n_lags)`.
 
@@ -1054,9 +1067,17 @@ class VAR(ImpulsoBaseModel):
         ones. And the model's initial point puts every latent equation
         inside the stationary region: own first lag at its prior mean when
         that is inside the region, otherwise 0.5, and every other
-        coefficient in the latent rows 0. PyMC sets an
-        initial value for `B` as a whole, so the observed rows start at
-        their prior mean, which is PyMC's default start for them anyway.
+        coefficient in the latent rows 0. PyMC's default start for a
+        `Normal` is its mean, so when every latent own-lag prior mean is
+        inside the region and the prior puts mean 0 on the rest of the
+        latent rows, as `MinnesotaPrior` does, no initial value is set.
+        Otherwise this method sets one for `B` as a whole, so the observed
+        rows start at their prior mean, which is PyMC's default start for
+        them anyway. PyMC cannot clone a model with a non-default initial
+        value: `model.copy()`, `pm.do` and `pm.observe` raise
+        `NotImplementedError`. A latent own-lag prior mean outside the
+        stationary region, the default of 1 included, therefore leaves the
+        host model unclonable.
         PyMC's `jitter+adapt_diag` start moves this by up to +-1; a jittered
         start outside the region has `-inf` log density, and PyMC redraws it
         (`jitter_max_retries`). A Potential is not a random variable, so
@@ -1318,7 +1339,7 @@ class VAR(ImpulsoBaseModel):
         if n_latent:
             # Start the latent equations inside the stationary region: an explosive own-lag
             # makes the generated path explode and freezes the chain.
-            model.set_initval(B, _latent_b_initval(prior_params["B_mu"], n_latent))
+            _set_latent_b_initval(model, B, prior_params["B_mu"], n_latent)
             _register_latent_stationarity(B, n_latent, n_vars, n_lags)
             latent, z = _latent_path(endog, X_exog, n_lags, n_vars, n_latent, intercept_term, B, B_exog, L, init_sigma)
             full = pt.concatenate([latent, pt.as_tensor_variable(endog)], axis=1)

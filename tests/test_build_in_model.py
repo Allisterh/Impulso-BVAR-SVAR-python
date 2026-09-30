@@ -1662,7 +1662,6 @@ class TestLatentModelIsClonable:
             VAR(lags=2, prior=prior).build_in_model(**_latent_setup(rng))
         return root
 
-    @pytest.mark.xfail(strict=True, raises=AssertionError, reason="issue 10c")
     @pytest.mark.parametrize(
         ("setup", "own_lag_mean"),
         [
@@ -1682,7 +1681,6 @@ class TestLatentModelIsClonable:
         assert model.rvs_to_initial_values[model["B"]] is None
         np.testing.assert_array_equal(model.initial_point(random_seed=0)["B"], _prior_mu(model["B"]))
 
-    @pytest.mark.xfail(strict=True, raises=NotImplementedError, reason="issue 10c")
     def test_copy_of_a_nested_model_with_exog_is_faithful(self, rng):
         root = self._nested_model_with_exog(rng)
         clone = root.copy()
@@ -1703,7 +1701,6 @@ class TestLatentModelIsClonable:
             assert np.isfinite(expected)
             assert float(clone.compile_logp()(at)) == pytest.approx(expected, rel=1e-12)
 
-    @pytest.mark.xfail(strict=True, raises=NotImplementedError, reason="issue 10c")
     def test_do_on_a_nested_model_with_exog(self, rng):
         import pymc as pm
 
