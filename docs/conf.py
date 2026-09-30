@@ -170,20 +170,6 @@ html_context = {
     "doc_path": "docs",
 }
 
-# -- Cloudflare Web Analytics -------------------------------------------------
-# GitHub Pages serves the docs through a DNS-only CNAME, so Cloudflare never
-# proxies the traffic and cannot inject its beacon; the page has to load the
-# script itself. The token belongs to the Web Analytics site for the
-# quantclimate.com zone; Cloudflare matches the hostname by suffix, so that site
-# also accepts data from impulso.quantclimate.com. It is not a secret (every
-# reader's browser receives it).
-html_js_files = [
-    (
-        "https://static.cloudflareinsights.com/beacon.min.js",
-        {"type": "module", "data-cf-beacon": '{"token": "3f29427f68be43bcb980df919a279816"}'},
-    ),
-]
-
 # Disable the sampler progress widget in all rendered notebooks (inherited by
 # the myst-nb execution kernel).
 os.environ["IMPULSO_DOCS_BUILD"] = "1"
