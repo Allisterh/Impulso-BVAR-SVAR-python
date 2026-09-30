@@ -1630,6 +1630,117 @@ class TestLatentOwnLagMeanAndInit:
         assert np.all(np.isfinite(np.asarray(idata.posterior["latent"])))
 
 
+class _LatentCrossLagPrior:
+    """A third-party prior: stationary latent own-lag mean 0, but mean 0.2 on the latent row's first cross-lag."""
+
+    def build_priors(self, n_vars, n_lags, *, sigma):
+        from impulso.priors import MinnesotaPrior
+
+        params = MinnesotaPrior(own_lag_mean=(0.0, 1.0, 1.0)).build_priors(n_vars, n_lags, sigma=sigma)
+        params["B_mu"] = params["B_mu"].copy()
+        params["B_mu"][0, 1] = 0.2
+        return params
+
+
+class TestLatentModelIsClonable:
+    """PyMC's `Model.copy()` and `pm.do` refuse a model with a non-default initial value.
+
+    `build_in_model` therefore sets one for `B` only when the stationary start
+    of the latent rows differs from the prior mean, which is PyMC's default
+    start for a `Normal`.
+    """
+
+    @staticmethod
+    def _nested_model_with_exog(rng):
+        """One latent series with own-lag prior mean 0, and exog, inside `pm.Model(name="brand")`."""
+        import pymc as pm
+
+        from impulso.priors import MinnesotaPrior
+
+        prior = MinnesotaPrior(own_lag_mean=(0.0, 1.0, 1.0))
+        with pm.Model() as root, pm.Model(name="brand"):
+            VAR(lags=2, prior=prior).build_in_model(**_latent_setup(rng))
+        return root
+
+    @pytest.mark.xfail(strict=True, raises=AssertionError, reason="issue 10c")
+    @pytest.mark.parametrize(
+        ("setup", "own_lag_mean"),
+        [
+            pytest.param(_latent_setup, (0.0, 1.0, 1.0), id="one-latent-zero"),
+            pytest.param(_latent_setup, (-0.9, 1.0, 1.0), id="one-latent-negative"),
+            pytest.param(_two_latent_setup, (0.0, 0.3, 1.0, 1.0), id="two-latent"),
+        ],
+    )
+    def test_stationary_prior_mean_sets_no_initial_value(self, rng, setup, own_lag_mean):
+        import pymc as pm
+
+        from impulso.priors import MinnesotaPrior
+
+        with pm.Model() as model:
+            VAR(lags=2, prior=MinnesotaPrior(own_lag_mean=own_lag_mean)).build_in_model(**setup(rng))
+
+        assert model.rvs_to_initial_values[model["B"]] is None
+        np.testing.assert_array_equal(model.initial_point(random_seed=0)["B"], _prior_mu(model["B"]))
+
+    @pytest.mark.xfail(strict=True, raises=NotImplementedError, reason="issue 10c")
+    def test_copy_of_a_nested_model_with_exog_is_faithful(self, rng):
+        root = self._nested_model_with_exog(rng)
+        clone = root.copy()
+
+        point = root.initial_point(random_seed=0)
+        clone_point = clone.initial_point(random_seed=0)
+        assert clone_point.keys() == point.keys()
+        for name, value in point.items():
+            np.testing.assert_array_equal(clone_point[name], value)
+        # The initial point zeroes the innovations and `latent_init`, so the latent path there is
+        # trivial; the moved point keeps `B` stationary and moves everything else.
+        moved = {
+            name: value if name == "brand::B" else value + 0.3 * rng.standard_normal(np.shape(value))
+            for name, value in point.items()
+        }
+        for at in (point, moved):
+            expected = float(root.compile_logp()(at))
+            assert np.isfinite(expected)
+            assert float(clone.compile_logp()(at)) == pytest.approx(expected, rel=1e-12)
+
+    @pytest.mark.xfail(strict=True, raises=NotImplementedError, reason="issue 10c")
+    def test_do_on_a_nested_model_with_exog(self, rng):
+        import pymc as pm
+
+        root = self._nested_model_with_exog(rng)
+        zero = np.zeros((3, 1))
+        do_model = pm.do(root, {"brand::B_exog": zero})
+
+        assert "brand::B_exog" not in {rv.name for rv in do_model.free_RVs}
+        point = do_model.initial_point(random_seed=0)
+        root_point = {**point, "brand::B_exog": zero}
+        # The intervention drops `B_exog`'s prior term and keeps the rest of the joint density.
+        expected = float(root.compile_logp()(root_point)) - float(
+            root.compile_logp(vars=[root["brand::B_exog"]])(root_point)
+        )
+        assert float(do_model.compile_logp()(point)) == pytest.approx(expected, rel=1e-12)
+
+    def test_latent_own_lag_prior_mean_of_one_still_sets_the_initial_value(self, rng):
+        import pymc as pm
+
+        with pm.Model() as model:
+            VAR(lags=2).build_in_model(**_latent_setup(rng))
+
+        assert model.rvs_to_initial_values[model["B"]] is not None
+        assert model.initial_point(random_seed=0)["B"][0, 0] == 0.5
+
+    def test_non_zero_prior_mean_elsewhere_in_a_latent_row_still_sets_the_initial_value(self, rng):
+        import pymc as pm
+
+        with pm.Model() as model:
+            VAR(lags=2, prior=_LatentCrossLagPrior()).build_in_model(**_latent_setup(rng))
+
+        assert model.rvs_to_initial_values[model["B"]] is not None
+        B0 = model.initial_point(random_seed=0)["B"]
+        np.testing.assert_array_equal(B0[0], np.zeros(6))
+        np.testing.assert_allclose(B0[1:], _prior_mu(model["B"])[1:])
+
+
 def _latent_setup_n(rng: np.random.Generator, n_latent: int, n_lags: int) -> dict:
     """`n_latent` latent series `b0, b1, ...` ahead of two observed series."""
     latent_names = [f"b{i}" for i in range(n_latent)]
