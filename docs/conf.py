@@ -168,9 +168,18 @@ ogp_enable_meta_description = True
 ogp_social_cards = {"enable": False}
 html_static_path = ["stylesheets"]
 html_css_files = ["extra.css"]
+# The theme links the SVG favicon from every page. The ICO and the iOS
+# home-screen icon go to the site root, where browsers look for them by
+# default. Both are rendered from the SVG; after editing it, regenerate them:
+#     cd docs/_brand
+#     for s in 16 32 48; do rsvg-convert -w $s -h $s favicon.svg -o /tmp/f$s.png; done
+#     magick /tmp/f16.png /tmp/f32.png /tmp/f48.png favicon.ico
+#     sed 's/ rx="7"//g' favicon.svg | rsvg-convert -w 180 -h 180 -o apple-touch-icon.png
+# (The apple-touch-icon is square-cornered because iOS applies its own mask.)
+html_favicon = "_brand/favicon.svg"
 # Cloudflare serves the site; _redirects maps directory URLs to index.html and
 # _headers adds the CORS header that GitHub Pages used to send.
-html_extra_path = ["_redirects", "_headers"]
+html_extra_path = ["_redirects", "_headers", "_brand/favicon.ico", "_brand/apple-touch-icon.png"]
 html_theme_options = {
     "accent_color": "crimson",  # names the token family; stylesheets/extra.css re-tones the crimson scale to ledger oxblood
     "color_mode": "auto",  # follow the reader's light/dark preference
