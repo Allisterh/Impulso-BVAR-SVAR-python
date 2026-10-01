@@ -168,8 +168,9 @@ ogp_enable_meta_description = True
 ogp_social_cards = {"enable": False}
 html_static_path = ["stylesheets"]
 html_css_files = ["extra.css"]
-# Cloudflare serves the site; _redirects maps directory URLs to index.html.
-html_extra_path = ["_redirects"]
+# Cloudflare serves the site; _redirects maps directory URLs to index.html and
+# _headers adds the CORS header that GitHub Pages used to send.
+html_extra_path = ["_redirects", "_headers"]
 html_theme_options = {
     "accent_color": "crimson",  # names the token family; stylesheets/extra.css re-tones the crimson scale to ledger oxblood
     "color_mode": "auto",  # follow the reader's light/dark preference
