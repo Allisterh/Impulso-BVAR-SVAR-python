@@ -115,13 +115,28 @@ math_eqref_format = "Eq. {number}"
 codeautolink_autodoc_inject = True
 
 # -- Intersphinx -------------------------------------------------------------
+# Each mapping lists two inventory locations: the upstream one (`None` means
+# "<target_uri>objects.inv"), then a vendored copy under `_inventories/`.
+# intersphinx tries them in order and stops at the first that loads.
+#
+# The fallback exists because the PR build runs under `-W`, where an unreachable
+# inventory is a hard failure: a docs.python.org outage (503 on every URL) once
+# failed build-docs on every open PR. The warning carries no type, so
+# `suppress_warnings` cannot target it. If some locations fail but one loads,
+# intersphinx logs only info, so the vendored copy keeps the build green.
+# GPJax does the same (its docs/conf.py has the details).
+#
+# Cost: the vendored copies go stale, so an object added upstream does not
+# resolve on a build where the fetch failed. Refresh them by re-downloading each
+# `<target_uri>objects.inv` into docs/_inventories/.
+_INV = os.path.join(os.path.dirname(__file__), "_inventories")
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-    "numpy": ("https://numpy.org/doc/stable/", None),
-    "pandas": ("https://pandas.pydata.org/docs/", None),
-    "arviz": ("https://python.arviz.org/en/stable/", None),
-    "pymc": ("https://www.pymc.io/projects/docs/en/stable/", None),
-    "matplotlib": ("https://matplotlib.org/stable/", None),
+    "python": ("https://docs.python.org/3", (None, f"{_INV}/python.inv")),
+    "numpy": ("https://numpy.org/doc/stable/", (None, f"{_INV}/numpy.inv")),
+    "pandas": ("https://pandas.pydata.org/docs/", (None, f"{_INV}/pandas.inv")),
+    "arviz": ("https://python.arviz.org/en/stable/", (None, f"{_INV}/arviz.inv")),
+    "pymc": ("https://www.pymc.io/projects/docs/en/stable/", (None, f"{_INV}/pymc.inv")),
+    "matplotlib": ("https://matplotlib.org/stable/", (None, f"{_INV}/matplotlib.inv")),
 }
 
 # -- HTML output -------------------------------------------------------------
